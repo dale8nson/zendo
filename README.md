@@ -1,4 +1,6 @@
-# Zendo.AI
+<p align="center">
+  <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAABAAAAAQACAYAAAB/HSuDAAAACXBIWXMAAA7DAAAOwwHHb6hkAAAAGXRFWHRTb2Z0d2FyZQB3d3cuaW5rc2NhcGUub3Jnm+48GgAAIABJREFUeJzs3XuUVfWZJ/zn7Hi/UnjnooDRqFHUJNMZFZVLZjoqmH7XO52kJ0iZWS2XGKdnpqfXmNir0z3T0XSSXj2zYizAmSUoJqY7/b4dCzTzDiUgKkknGopc1BgBgUJFpLh4x+zz/uEpUiDXqnPOPnvvz2etszoC4gMNdc7z/T2/Z1eq1Wo1AAAAgEJLsi4AAAAAaDwBAAAAAJSAAAAAAABKQAAAAAAAJSAAAAAAgBIQAAAAAEAJCAAAAACgBAQAAAAAUAICAAAAACgBAQAAAACUgAAAAAAASkAAAAAAACUgAAAAAIASEAAAAABACQg..." alt="ZendoAI Logo" width="300"/>
+</p>
 
 > A full-stack, modular generative AI platform for vision-based machine learning — created by [Dale Hutchinson](https://daletristanhutchinson.com).
 
