@@ -1,14 +1,14 @@
 <p align="center">
-  <img src="./assets/zendo-logo-gradient-transparent-dark.svg" alt="ZendoAI Logo" width="400"/>
+  <img src="./assets/zendo-logo-gradient-transparent-dark.svg" alt="ZendoAI Logo" width="512"/>
 </p>
 
 > A full-stack, modular generative AI platform for vision-based machine learning — created by [Dale Hutchinson](https://daletristanhutchinson.com).
 
 ---
 
-## 🔍 What is Zendo.AI?
+## 🔍 What is ZendoAI?
 
-**Zendo.AI** is a hybrid Rust–Python–Next.js platform for experimenting with image annotation, model training, and generative inference. It’s inspired by Zen aesthetics and designed for long-term modular growth.
+**ZendoAI** is a hybrid Rust–Python–Next.js platform for experimenting with image annotation, model training, and generative inference. It’s inspired by Zen aesthetics and designed for long-term modular growth.
 
 This is both a **personal R&D lab** and a **portfolio project**. The goal is to build a toolset where:
 - Image datasets can be uploaded, edited, and labeled
