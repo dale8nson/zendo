@@ -342,5 +342,8 @@
      font-family="Helvetica, Arial, sans-serif"
      font-size="144px"
      fill="#e0e0e0ff"
-     id="text2326">ZendoAI</text>
+     id="text2326"
+     style="scale:85%"
+     >ZendoAI</text>
+     
 </svg>
