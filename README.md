@@ -15,7 +15,7 @@ This is both a **personal R&D lab** and a **portfolio project**. The goal is to 
 - Lightweight models can be trained and tested (CLIP, MobileNet)
 - Eventually, generative models can produce new images from structured input
 
----
+--- 
 
 ## 🧠 Tech Stack
 
