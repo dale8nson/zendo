@@ -1,5 +1,5 @@
-<p align="center">
-  <img src="./assets/zendo-logo-gradient-transparent-dark.svg" alt="ZendoAI Logo" width="512" style="margin-bottom:150px" />
+<p align="center" style="margin-bottom:150px">
+  <img src="./assets/zendo-logo-gradient-transparent-dark.svg" alt="ZendoAI Logo" width="512" />
 </p>
 
 > A full-stack, modular generative AI platform for vision-based machine learning — created by [Dale Hutchinson](https://daletristanhutchinson.com).
