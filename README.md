@@ -4,45 +4,101 @@
 <br><br>
 A full-stack, modular generative AI platform for vision-based machine learning — created by [Dale Hutchinson](https://daletristanhutchinson.com).
 
----
+# ZendoAI
 
-## 🔍 What is ZendoAI?
+**ZendoAI** is an experimental generative AI platform designed to support the entire image model development lifecycle — from dataset creation and annotation to model training, fine-tuning, and photorealistic image generation from text prompts.
 
-**ZendoAI** is a hybrid Rust–Python–Next.js platform for experimenting with image annotation, model training, and generative inference. It’s inspired by Zen aesthetics and designed for long-term modular growth.
-
-This is both a **personal R&D lab** and a **portfolio project**. The goal is to build a toolset where:
-- Image datasets can be uploaded, edited, and labeled
-- Lightweight models can be trained and tested (CLIP, MobileNet)
-- Eventually, generative models can produce new images from structured input
+This project represents an ongoing effort to combine **Rust**, **Python**, and **Next.js** into a unified, performant, modular system for generative AI research and tooling.
 
 ---
 
-## 🧠 Tech Stack
+## 🔍 Why ZendoAI?
 
-- **Frontend**: Next.js (App Router), Tailwind CSS, Canvas API
-- **Backend**: FastAPI (Python), Rust (image preprocessing, WASM)
-- **ML**: PyTorch, CLIP, StyleGAN2 (planned)
-- **Architecture**: Dockerized backend + modular file structure
-
----
-
-## 📌 Status
-
-This project is under active development. Current milestones:
-- [x] Project branding + design direction
-- [x] Logo and UI theme finalized
-- [ ] Image upload, gallery, and editable canvas
-- [ ] Prediction via FastAPI + CLIP
-- [ ] MVP training workflow with model saving
-- [ ] Text-to-image generation proof of concept
+- Designed for **researchers, developers, and creators** working at the intersection of ML, UI/UX, and image synthesis
+- Inspired by Zen principles of **clarity**, **precision**, and **intentionality** in design and engineering
+- Prioritizes **modularity** and **customization** over one-size-fits-all black-box models
 
 ---
 
-## 🙋‍♂️ About Me
+## 🚀 Key Features (WIP)
 
-I'm Dale — a self-taught developer with a background in research and education, currently focused on full-stack and ML-driven applications. I created Zendo.AI as a way to merge my interests in systems programming, machine learning, and thoughtful software design.
-
-👉 [daletristanhutchinson.com](https://daletristanhutchinson.com)  
-📫 [daletristanhutchinson@gmail.com](mailto:daletristanhutchinson@gmail.com)
+- 📁 **Image annotation and gallery interface** (Next.js + Tailwind)
+- 🧠 **Canvas-based image editor** for cropping, labeling, preprocessing
+- 🛠️ **FastAPI backend** for prediction and preprocessing
+- 🧬 **CLIP integration** for vision–language embedding
+- 🧪 **Rust–Python bridge** for performance-critical tasks (planned)
+- 🌀 Future integration of **custom generative models** (GAN, diffusion, etc.)
+- 🔄 Model versioning, loading/saving, and dataset switching (in progress)
 
 ---
+
+## 🧱 Tech Stack
+
+| Layer          | Technology                     |
+|----------------|--------------------------------|
+| Frontend       | Next.js (App Router), Tailwind CSS |
+| State/Storage  | Local uploads (S3 planned)     |
+| Backend        | FastAPI (Python)               |
+| ML/Inference   | PyTorch, CLIP                  |
+| Performance    | Rust + WASM (planned)          |
+| Deployment     | Docker (WIP), Fly.io (planned) |
+
+---
+
+## 🛠️ Installation & Setup
+
+> Note: This project is under active development. Setup steps may change.
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/dale8nson/zendoai.git
+cd zendoai
+```
+
+### 2. Install frontend dependencies
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+### 3. Start backend (Python/FastAPI)
+
+```bash
+cd backend
+source venv/bin/activate  # or use your preferred virtualenv tool
+uvicorn app.main:app --reload
+```
+
+### 4. Access the app
+
+Visit [http://localhost:3000](http://localhost:3000)
+
+---
+
+## 🧭 Roadmap
+
+- [x] Image upload + persistent gallery
+- [x] Canvas-based annotation and editor
+- [x] Prediction API integration
+- [ ] Model save/load support
+- [ ] Rust–Python data bridge
+- [ ] Dataset segmentation + label versioning
+- [ ] Generative model fine-tuning + inference
+- [ ] Cloud-based persistent storage (Backblaze B2 / S3)
+
+---
+
+## 🌱 Why I Built This
+
+ZendoAI is a personal research project rooted in a broader vision: to create a robust, ethical, and modular system for exploring **AI-generated imagery** — from raw data to final render.
+
+It merges my interests in:
+- Systems programming (**Rust**)
+- Machine learning experimentation (**Python**)
+- Human-centered UI design (**React/Next.js**)
+- Performance optimization and custom ML tooling
+
+ZendoAI reflects my belief that **developer tools should be beautiful**, **flexible**, and **deeply thoughtful** — and that the future of generative AI lies in giving creators more understanding and control.
