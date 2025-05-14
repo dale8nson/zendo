@@ -8,46 +8,46 @@ A full-stack, modular generative AI platform for vision-based machine learning �
 
 **ZendoAI** is an experimental generative AI platform designed to support the entire image model development lifecycle — from dataset creation and annotation to model training, fine-tuning, and photorealistic image generation from text prompts.
 
-This project represents an ongoing effort to combine **Rust**, **Python**, and **Next.js** into a unified, performant, modular system for generative AI research and tooling.
+This project is in its early foundational phase, focused on implementing core functionality in **Rust** and wrapping it in **Python** for integration with machine learning workflows. The long-term vision is to create a modular, performant, and elegant system combining Rust, Python, and Next.js.
 
 ---
 
 ## 🔍 Why ZendoAI?
 
-- Designed for **researchers, developers, and creators** working at the intersection of ML, UI/UX, and image synthesis
-- Inspired by Zen principles of **clarity**, **precision**, and **intentionality** in design and engineering
-- Prioritizes **modularity** and **customization** over one-size-fits-all black-box models
+- Designed for developers and researchers who want full control over their image-based ML pipelines
+- Inspired by Zen principles of **clarity**, **intentionality**, and **technical elegance**
+- Aims to bridge the performance of systems programming with the flexibility of Python and the accessibility of modern web interfaces
 
 ---
 
-## 🚀 Key Features (WIP)
+## 🧪 Current Features
 
-- 📁 **Image annotation and gallery interface** (Next.js + Tailwind)
-- 🧠 **Canvas-based image editor** for cropping, labeling, preprocessing
-- 🛠️ **FastAPI backend** for prediction and preprocessing
-- 🧬 **CLIP integration** for vision–language embedding
-- 🧪 **Rust–Python bridge** for performance-critical tasks (planned)
-- 🌀 Future integration of **custom generative models** (GAN, diffusion, etc.)
-- 🔄 Model versioning, loading/saving, and dataset switching (in progress)
+- ✅ Core image-processing functions implemented in **Rust**:
+  - Image resizing
+  - Aspect-ratio-preserving fit
+  - Cropping
+- ✅ Python bindings generated for integration with ML workflows
+- 🛠️ Under development:
+  - CLI tools for image dataset preprocessing
+  - CLI test harness for evaluating Rust bindings
 
 ---
 
 ## 🧱 Tech Stack
 
-| Layer          | Technology                     |
-|----------------|--------------------------------|
-| Frontend       | Next.js (App Router), Tailwind CSS |
-| State/Storage  | Local uploads (S3 planned)     |
-| Backend        | FastAPI (Python)               |
-| ML/Inference   | PyTorch, CLIP                  |
-| Performance    | Rust + WASM (planned)          |
-| Deployment     | Docker (WIP), Fly.io (planned) |
+| Layer        | Technology                    |
+|--------------|-------------------------------|
+| Core Logic   | Rust                          |
+| Python API   | PyO3                          |
+| ML/Workflow  | PyTorch (planned)             |
+| Frontend     | Next.js + WASM (planned)      |
+| Deployment   | Docker (planned)              |
 
 ---
 
-## 🛠️ Installation & Setup
+## 🛠️ Getting Started
 
-> Note: This project is under active development. Setup steps may change.
+> ⚠️ This project is under heavy development. Interfaces and folder structure may change frequently.
 
 ### 1. Clone the repository
 
@@ -56,49 +56,52 @@ git clone https://github.com/dale8nson/zendoai.git
 cd zendoai
 ```
 
-### 2. Install frontend dependencies
+### 2. Build Rust library
 
 ```bash
-cd frontend
-npm install
-npm run dev
+cd rust
+cargo build --release
 ```
 
-### 3. Start backend (Python/FastAPI)
+### 3. Set up Python virtual environment
 
 ```bash
-cd backend
-source venv/bin/activate  # or use your preferred virtualenv tool
-uvicorn app.main:app --reload
+cd python
+python3 -m venv venv
+source venv/bin/activate
+pip install maturin
+maturin develop
 ```
 
-### 4. Access the app
+### 4. Run Python test script
 
-Visit [http://localhost:3000](http://localhost:3000)
+```bash
+python test_bindings.py
+```
 
 ---
 
 ## 🧭 Roadmap
 
-- [x] Image upload + persistent gallery
-- [x] Canvas-based annotation and editor
-- [x] Prediction API integration
-- [ ] Model save/load support
-- [ ] Rust–Python data bridge
-- [ ] Dataset segmentation + label versioning
-- [ ] Generative model fine-tuning + inference
-- [ ] Cloud-based persistent storage (Backblaze B2 / S3)
+- [x] Core Rust image operations
+- [x] Python bindings (PyO3 / maturin)
+- [ ] Dataset preprocessing CLI
+- [ ] Test coverage for all functions
+- [ ] FastAPI backend for prediction (planned)
+- [ ] Canvas-based web frontend (Next.js + WASM)
+- [ ] Generative model integration (CLIP + GAN/diffusion)
+- [ ] Model versioning + metadata storage
 
 ---
 
 ## 🌱 Why I Built This
 
-ZendoAI is a personal research project rooted in a broader vision: to create a robust, ethical, and modular system for exploring **AI-generated imagery** — from raw data to final render.
+ZendoAI reflects my passion for building systems that are not only technically powerful but also thoughtfully designed. It’s a long-term research project to explore the full lifecycle of generative image models — from structured dataset creation to neural network training to interactive synthesis and evaluation.
 
-It merges my interests in:
-- Systems programming (**Rust**)
-- Machine learning experimentation (**Python**)
-- Human-centered UI design (**React/Next.js**)
-- Performance optimization and custom ML tooling
+My goal is to create an open, modular platform that combines:
+- The performance of **Rust**
+- The flexibility of **Python**
+- The accessibility of **modern web UIs**
+- The intentionality of **good design**
 
-ZendoAI reflects my belief that **developer tools should be beautiful**, **flexible**, and **deeply thoughtful** — and that the future of generative AI lies in giving creators more understanding and control.
+---
