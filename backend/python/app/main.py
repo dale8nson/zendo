@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routes import example, upload
+from .routes import example, upload, metadata
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import os
@@ -21,6 +21,7 @@ app.mount("/assets", StaticFiles(directory=f"{cwd}/../../assets"), name="assets"
 
 
 app.include_router(example.router)
+app.include_router(metadata.router, prefix="/api")
 
 @app.get("/")
 def read_root():
