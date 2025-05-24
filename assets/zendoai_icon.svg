@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="512" height="512" viewBox="0 0 512 512" version="1.1">
+  <defs>
+    <linearGradient id="zenGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ee0000"/>
+      <stop offset="100%" stop-color="#000000"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Enso circle (open at bottom, brush‑style taper via stroke-linecap round) -->
+  <circle cx="256" cy="256" r="220"
+          fill="none"
+          stroke="url(#zenGrad)"
+          stroke-width="70"
+          stroke-linecap="round"
+          stroke-dasharray="1380 350"/>
+
+  <!-- Zig‑zag stroke -->
+  <polyline points="210,160 302,208 210,256 302,304 210,352"
+            fill="none"
+            stroke="url(#zenGrad)"
+            stroke-width="70"
+            stroke-linecap="round"
+            stroke-linejoin="round"/>
+
+  <!-- Optional “ink‑pool” nodes -->
+  <circle cx="210" cy="160" r="35" fill="url(#zenGrad)"/>
+  <circle cx="302" cy="208" r="35" fill="url(#zenGrad)"/>
+  <circle cx="210" cy="256" r="35" fill="url(#zenGrad)"/>
+  <circle cx="302" cy="304" r="35" fill="url(#zenGrad)"/>
+  <circle cx="210" cy="352" r="35" fill="url(#zenGrad)"/>
+</svg>

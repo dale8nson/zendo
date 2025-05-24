@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<svg viewBox="0 0 1024 1024" width="1024" height="1024"
+     xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+
+  <defs>
+    <linearGradient id="red2black" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%"  stop-color="#ee0000"/>
+      <stop offset="100%" stop-color="#000000"/>
+    </linearGradient>
+
+    <filter id="rough" x="-5%" y="-5%" width="110%" height="110%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2"
+                    result="noise"/>
+      <feDisplacementMap in2="noise" in="SourceGraphic"
+                         scale="3" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+  </defs>
+
+  <circle cx="512" cy="512" r="400"
+          fill="none" stroke="url(#red2black)" stroke-width="280"
+          stroke-linecap="round" 
+          stroke-dasharray="2400 800"
+          transform="rotate(-90 512 512)"
+          filter="url(#rough)"/>
+
+  <polyline points="
+      640,256
+      384,384
+      640,512
+      384,640
+      640,768"
+      fill="none" stroke="url(#red2black)" stroke-width="200"
+      stroke-linecap="round" stroke-linejoin="round"
+      filter="url(#rough)"/>
+
+  <g filter="url(#rough)">
+    <circle cx="640" cy="256" r="70" fill="url(#red2black)"/>
+    <circle cx="384" cy="384" r="70" fill="url(#red2black)"/>
+    <circle cx="640" cy="512" r="70" fill="url(#red2black)"/>
+    <circle cx="384" cy="640" r="70" fill="url(#red2black)"/>
+  </g>
+</svg>
