@@ -13,7 +13,9 @@ model, _, _ = open_clip.create_model_and_transforms(
     model_name="ViT-B-32", pretrained="laion2b_s34b_b79k"
 )
 
-preprocess_val = transforms.Compose([transforms.Resize(224, interpolation=transforms.InterpolationMode.BICUBIC ),
+preprocess_val = Compose([
+    # transforms.PILToTensor(),
+    transforms.Resize(224, interpolation=transforms.InterpolationMode.BICUBIC ),
     transforms.CenterCrop(224),
     transforms.ToTensor(),
     transforms.Normalize(
@@ -28,14 +30,12 @@ model.eval()
 
 UPLOAD_DIR = "app/uploads"
 
-def predict_clip(filename: str, class_names: list[str]) -> dict:
-    image_path = os.path.join(UPLOAD_DIR, filename)
-    img = Image.open(image_path)
-    tensor = cast(torch.Tensor, preprocess_val(img))
-    image = tensor.unsqueeze(0).to(device)
+def predict_clip_image(image: Image.Image, class_names: list[str]) -> dict:
+    img_tensor = cast(torch.Tensor, preprocess_val(image))
+    img_tensor = img_tensor.unsqueeze(0).to(device)
 
     with torch.no_grad():
-        image_features = model.encode_image(image)
+        image_features = model.encode_image(img_tensor)
         text_tokens = tokenizer(class_names).to(device)
         text_features = model.encode_text(text_tokens)
 

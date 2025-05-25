@@ -4,3 +4,7 @@ backend/rust/target/**/*
 uploads/**/*
 .venv/
 __pycache__/
+backend/rust/src/bin/
+rust-project.json
+pyrightconfig.json
+target/

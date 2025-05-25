@@ -13,19 +13,25 @@ crate-type = ["cdylib", "rlib"]
 name = "zendo_backend"
 path = "src/main.rs"
 
+[[bin]]
+name = "dev"
+path = "src/bin/dev.rs"
+
 [dependencies]
 anyhow = "1.0.98"
 image = "0.25.6"
-pyo3 = { version = "0.24.2", features = [
-    "extension-module",
-    "auto-initialize",
-    "macros",
-] }
 serde = { version = "1.0.219", features = ["derive"] }
+
+[features]
+default = ["python"]
+python = ["pyo3"]
+
+[dependencies.pyo3]
+version = "0.24.2"
+optional = true
+features = ["extension-module", "auto-initialize", "macros"]
+
 
 [package.metadata.maturin]
 python-source = "python"
-include = [
-    "python/**/*.py",
-    "python/**/*.pyi",
-]
+include = ["python/**/*.py", "python/**/*.pyi"]
