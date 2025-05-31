@@ -1,11 +1,16 @@
 use anyhow::{Error, Result};
+use fast_image_resize as fir;
+use fir::{images::Image, PixelType, ResizeOptions, Resizer};
+
 use image::{
     imageops::{crop, resize, FilterType, Lanczos3},
-    DynamicImage, GenericImageView, ImageFormat, ImageReader,
+    DynamicImage, GenericImageView, ImageBuffer, ImageFormat, ImageReader, RgbImage,
 };
 
 use std::io::Cursor;
 use std::path::Path;
+
+pub mod infer;
 
 #[cfg(feature = "python")]
 pub mod python;
@@ -49,14 +54,26 @@ fn crop_image(data: &[u8], x: u32, y: u32, w: u32, h: u32) -> Result<Vec<u8>> {
     Ok(buf)
 }
 
-pub fn transform_image(path: &str, scale: f32) -> Result<DynamicImage, image::ImageError> {
+pub fn transform_image(path: &str, scale: f32) -> Result<DynamicImage, Box<dyn std::error::Error>> {
     let img = image::open(path)?;
+    let rgb = img.to_rgb8();
+    let (width, height) = rgb.dimensions();
 
-    let (width, height) = img.dimensions();
     let new_width = (width as f32 * scale) as u32;
     let new_height = (height as f32 * scale) as u32;
 
-    let scaled = img.resize(new_width, new_height, FilterType::CatmullRom);
+    let mut src_image = Image::from_vec_u8(width, height, rgb.into_raw(), PixelType::U8x3)?;
+    let mut dst_image = Image::new(new_width, new_height, PixelType::U8x3);
 
-    Ok(scaled)
+    let mut resizer = Resizer::new();
+    let options = ResizeOptions::new();
+
+    resizer
+        .resize(&mut src_image, &mut dst_image, Some(&options))
+        .expect("Resize failed");
+
+    let buffer = ImageBuffer::from_raw(new_width, new_height, dst_image.buffer().to_vec())
+        .ok_or("Failed to create image buffer")?;
+
+    Ok(DynamicImage::ImageRgb8(buffer))
 }

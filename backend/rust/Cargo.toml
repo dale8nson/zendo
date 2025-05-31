@@ -19,15 +19,22 @@ path = "src/bin/dev.rs"
 
 [dependencies]
 anyhow = "1.0.98"
-image = "0.25.6"
+fast_image_resize = { version = "5.1.4", features = [
+    "image",
+    "rayon",
+    "for_testing",
+] }
+image = { version = "0.25.6", features = ["jpeg", "png"] }
+numpy = "0.25.0"
 serde = { version = "1.0.219", features = ["derive"] }
+tch = { version = "0.20.0", features = ["download-libtorch"] }
 
 [features]
 default = ["python"]
 python = ["pyo3"]
 
 [dependencies.pyo3]
-version = "0.24.2"
+version = "0.25.0"
 optional = true
 features = ["extension-module", "auto-initialize", "macros"]
 
