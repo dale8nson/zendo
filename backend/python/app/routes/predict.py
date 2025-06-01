@@ -3,9 +3,10 @@ from pydantic import BaseModel
 from typing import Optional, Literal
 import os
 from app.services.clip_model import predict_clip_image
-from app.services.metadata_handler import save_metadata_entry
+from app.services.metadata_handler import log_prediction_to_db
 from PIL import Image
 from logging import Filter
+from datetime import datetime
 
 
 UPLOAD_DIR = "app/uploads"
@@ -67,9 +68,9 @@ def predict_image(data: PredictRequest):
     class_names = ["paint", "wall", "house", "interior", "plaster"]
     result = predict_clip_image(image, class_names)
 
-    save_metadata_entry({
-        "filename": data.filename,
-        "label": result.get("label", None)
-    })
+    log_prediction_to_db(
+       data.filename,
+       result.get("predicted", ""),
+       result.get("scores", []))
 
     return result

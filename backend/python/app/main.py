@@ -4,6 +4,9 @@ from .routes import example, upload, metadata, predict
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import os
+from .services.db import init_db
+
+init_db()
 
 app = FastAPI()
 
