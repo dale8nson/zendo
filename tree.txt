@@ -1,0 +1,52 @@
+.
+├── assets
+│   ├── zendo_logo_no_text.svg
+│   ├── zendo-logo-gradient-transparent-dark.svg
+│   ├── zendoai_icon.svg
+│   ├── zendoai_logo.svg
+│   └── zendoai-logo.svg
+├── backend
+│   ├── models
+│   │   └── openclip
+│   ├── python
+│   │   ├── app
+│   │   └── requirements.txt
+│   └── rust
+│       ├── Cargo.lock
+│       ├── Cargo.toml
+│       ├── python
+│       ├── src
+│       └── target
+├── benchmarks
+│   ├── benchmark_clip_inference.py
+│   └── benchmark_transform.py
+├── Dockerfile
+├── fly.toml
+├── frontend
+│   ├── app
+│   │   ├── favicon.ico
+│   │   ├── favicon.png
+│   │   ├── globals.css
+│   │   ├── layout.tsx
+│   │   └── page.tsx
+│   ├── next-env.d.ts
+│   ├── next.config.ts
+│   ├── node_modules
+│   ├── package-lock.json
+│   ├── package.json
+│   ├── postcss.config.mjs
+│   ├── public
+│   │   ├── file.svg
+│   │   ├── globe.svg
+│   │   ├── next.svg
+│   │   ├── vercel.svg
+│   │   └── window.svg
+│   ├── README.md
+│   └── tsconfig.json
+├── pyrightconfig.json
+├── README.md
+├── README2.md
+├── rust-project.json
+└── tree.txt
+
+15 directories, 34 files

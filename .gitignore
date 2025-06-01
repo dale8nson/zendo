@@ -8,3 +8,4 @@ backend/rust/src/bin/
 rust-project.json
 pyrightconfig.json
 target/
+.zed
