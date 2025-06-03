@@ -6,6 +6,7 @@ from starlette.exceptions import HTTPException
 
 UPLOAD_DIR = "app/uploads"
 
+
 async def save_upload_file(file: UploadFile) -> str:
     os.makedirs(UPLOAD_DIR, exist_ok=True)
     if filename := file.filename:

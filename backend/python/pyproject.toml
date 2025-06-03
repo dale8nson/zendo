@@ -1,0 +1,21 @@
+[tool.black]
+line-length = 88
+target-version = ['py312']
+
+[tool.isort]
+profile = "black"
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+select = ["E", "F", "I", "B"]
+
+[tool.ruff.lint]
+fixable = ["I"]
+
+[tool.ruff.format]
+docstring-code-format = true
+quote-style = "double"
+
+[tool.pyright]
+pythonVersion = "3.12"

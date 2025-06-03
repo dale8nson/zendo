@@ -11,7 +11,7 @@
         // in your project's settings, rather than globally.
         "directories": [".env", "env", "backend/python/.venv", "venv"],
         // Can also be `csh`, `fish`, and `nushell`
-        "activate_script": "activate"
+        "activate_script": "default"
       }
     }
   }

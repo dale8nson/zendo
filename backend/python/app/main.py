@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routes import example, upload, metadata, predict
+from .routes import example, upload, metadata, predict, images
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import os
@@ -10,10 +10,8 @@ init_db()
 
 app = FastAPI()
 
-app.add_middleware(CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"]
+app.add_middleware(
+    CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
 )
 
 app.include_router(upload.router, prefix="/api")
@@ -26,10 +24,13 @@ app.mount("/assets", StaticFiles(directory=f"{cwd}/../../assets"), name="assets"
 app.include_router(example.router)
 app.include_router(metadata.router, prefix="/api")
 app.include_router(predict.router, prefix="/api")
+app.include_router(images.router, prefix="/api")
+
 
 @app.get("/")
 def read_root():
-    return {"message": "ZendoAI Backend is running" }
+    return {"message": "ZendoAI Backend is running"}
+
 
 @app.get("/favicon.ico", include_in_schema=False)
 def favicon():

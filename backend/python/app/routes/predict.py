@@ -13,13 +13,14 @@ UPLOAD_DIR = "app/uploads"
 
 router = APIRouter()
 
+
 def crop_and_resize(
     image: Image.Image,
     x: float = 0.0,
     y: float = 0.0,
     scale: float = 1.0,
     fit: str = "contain",
-    target_size: int = 224
+    target_size: int = 224,
 ) -> Image.Image:
     w, h = image.size
     scaled_w = int(w * scale)
@@ -28,14 +29,17 @@ def crop_and_resize(
 
     offset_x = int(x * scaled_w)
     offset_y = int(y * scaled_h)
-    image = image.crop((offset_x, offset_y, offset_x + target_size, offset_y + target_size))
+    image = image.crop(
+        (offset_x, offset_y, offset_x + target_size, offset_y + target_size)
+    )
 
-    if fit =="contain":
+    if fit == "contain":
         image = image.resize((target_size, target_size), Image.Resampling.LANCZOS)
     elif fit == "cover":
         image = image.crop((0, 0, target_size, target_size))
 
     return image
+
 
 class TransformParams(BaseModel):
     x: float = 0.0
@@ -43,9 +47,11 @@ class TransformParams(BaseModel):
     scale: float = 1.0
     fit: Literal["cover", "contain"] = "contain"
 
+
 class PredictRequest(BaseModel):
     filename: str
     transform: Optional[TransformParams] = None
+
 
 @router.post("/predict")
 def predict_image(data: PredictRequest):
@@ -62,15 +68,14 @@ def predict_image(data: PredictRequest):
             x=data.transform.x,
             y=data.transform.y,
             scale=data.transform.scale,
-            fit=data.transform.fit
+            fit=data.transform.fit,
         )
 
     class_names = ["paint", "wall", "house", "interior", "plaster"]
     result = predict_clip_image(image, class_names)
 
     log_prediction_to_db(
-       data.filename,
-       result.get("predicted", ""),
-       result.get("scores", []))
+        data.filename, result.get("predicted", ""), result.get("scores", [])
+    )
 
     return result

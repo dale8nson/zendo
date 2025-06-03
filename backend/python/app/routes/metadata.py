@@ -4,6 +4,7 @@ from app.services.db import DB_PATH
 
 router = APIRouter()
 
+
 @router.get("/metadata")
 def get_metadata():
     with sqlite3.connect(DB_PATH) as conn:
