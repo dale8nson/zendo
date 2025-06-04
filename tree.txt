@@ -10,6 +10,7 @@
 │   │   └── openclip
 │   ├── python
 │   │   ├── app
+│   │   ├── pyproject.toml
 │   │   └── requirements.txt
 │   └── rust
 │       ├── Cargo.lock
@@ -24,14 +25,23 @@
 ├── fly.toml
 ├── frontend
 │   ├── app
+│   │   ├── ~favicon.ico
+│   │   ├── api
 │   │   ├── favicon.ico
 │   │   ├── favicon.png
 │   │   ├── globals.css
 │   │   ├── layout.tsx
-│   │   └── page.tsx
+│   │   ├── page.tsx
+│   │   └── providers.tsx
+│   ├── components
+│   │   ├── ImageEditor.tsx
+│   │   ├── ImageGallery.tsx
+│   │   ├── ImageUploadForm.tsx
+│   │   └── PredictionDisplay.tsx
+│   ├── lib
+│   │   └── utils.ts
 │   ├── next-env.d.ts
 │   ├── next.config.ts
-│   ├── node_modules
 │   ├── package-lock.json
 │   ├── package.json
 │   ├── postcss.config.mjs
@@ -45,8 +55,7 @@
 │   └── tsconfig.json
 ├── pyrightconfig.json
 ├── README.md
-├── README2.md
 ├── rust-project.json
 └── tree.txt
 
-15 directories, 34 files
+18 directories, 41 files

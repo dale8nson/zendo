@@ -3,9 +3,9 @@ import './globals.css'
 import { Providers } from './providers'
 
 export const metadata: Metadata = {
-  title: '',
-  description: '',
-  keywords: [],
+  title: 'ZendoAI',
+  description: 'AI-powered image editing and transformation tool',
+  keywords: ['AI', 'image', 'editing', 'transformation', 'tool'],
 }
 
 export default function RootLayout({
@@ -14,8 +14,8 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className="min-[0px]:w-screen min-[0px]:h-screen">
-      <body className={'min-[0px]:w-full min-[0px]:h-full md:w-screen md:h-screen antialiased'}>
+    <html lang="en" className="w-screen h-screen">
+      <body className={'w-screen h-screen md:w-screen md:h-screen antialiased'}>
         <Providers>{children}</Providers>
       </body>
     </html>

@@ -69,9 +69,12 @@ export const ImageGallery = () => {
   return (
     <div className="max-w-[1200px] mx-auto px-4 py-8">
       <h2 className="text-2xl font-semidbold mb-4 text-center text-white">Uploaded Images</h2>
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 w-full">
         {entries.map((entry) => (
-          <div key={entry.filename} className="bg-gray-800 rounded-lg overflow-hidden shadow-lg">
+          <div
+            key={entry.filename}
+            className="bg-zinc-900 rounded-xl shadow-lg border border-zinc-700 overflow-hidden "
+          >
             <img
               src={URL.createObjectURL(new Blob([Buffer.from(entry.image_data, 'base64')]))}
               alt={entry.label || entry.original_filename}
