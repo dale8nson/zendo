@@ -46,7 +46,7 @@ jobs:
         run: |
           export LIBTORCH=/opt/libtorch
           export LD_LIBRARY_PATH=$LIBTORCH/lib
-          maturin build --release --features python -o ../python/app/wheels/
+          maturin build --release --features python -o ./wheels --interpreter python3.12
 
       - name: Git LFS setup and push built wheel
         run: |

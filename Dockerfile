@@ -38,6 +38,6 @@ ENV PATH="/opt/venv/bin:$PATH"
 # Copy backend app
 COPY backend/python/ ./app
 COPY backend/python/app/wheels/*.whl /tmp/
-RUN pip install /tmp/*.whl
+RUN pip install /tmp/*.whl -v
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
