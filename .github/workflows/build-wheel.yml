@@ -62,18 +62,21 @@ jobs:
         working-directory: /home/runner/work/zendo/zendo/
         run: ls -la
 
-      - name: Add wheel file to git
+      - name: Push built wheel using Git LFS
         run: |
-          git lfs install
-          git lfs track "backend/python/app/wheels/zendoai-0.1.0-cp312-cp312-manylinux_2_34_x86_64.whl"
-          for wheel in ./backend/python/app/wheels/*.whl; do
-            if [ -f "$wheel" ]; then
-              git add "$wheel"
-            fi
-          done
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
 
-      - name: Commit and push wheel
-        run: |
+          git lfs install
+          git lfs track "*.whl"
+          echo "*.whl filter=lfs diff=lfs merge=lfs -text" > .gitattributes
+          git add .gitattributes
+
+          git add backend/python/app/wheels/*.whl
+
           git commit -m "Add built wheel from CI" || echo "Nothing to commit"
-          git push https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ github.repository }} HEAD:${{ github.ref }}
+
+          # Push using Personal Access Token
+          git remote set-url origin https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ github.repository }}
+          git push origin HEAD:main
         continue-on-error: true
