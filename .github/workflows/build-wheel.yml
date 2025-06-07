@@ -67,14 +67,7 @@ jobs:
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
 
-          git lfs install
-          git lfs track "*.whl"
-          echo "*.whl filter=lfs diff=lfs merge=lfs -text" > .gitattributes
-          git add .gitattributes
-
           git add backend/python/app/wheels/*.whl
-
-          git lfs uninstall
 
           git commit -m "Add built wheel from CI" || echo "Nothing to commit"
 
@@ -87,5 +80,11 @@ jobs:
         with:
           name: zendoai-wheel
           path: backend/python/app/wheels/*.whl
+
+      - name: Download wheel artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: zendoai-wheel
+          path: backend/python/app/wheels/
 
         continue-on-error: true
