@@ -28,7 +28,7 @@ jobs:
 
       - name: Download and extract libtorch
         run: |
-          curl -L https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-2.7.1%2Bcpu.zip -o libtorch.zip
+          curl -L https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-2.7.0%2Bcpu.zip -o libtorch.zip
           unzip libtorch.zip -d /opt
         env:
           LIBTORCH: /opt/libtorch
