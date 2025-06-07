@@ -13,6 +13,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Print CWD
+        run: cwd
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -48,7 +51,7 @@ jobs:
         run: |
           export LIBTORCH=/opt/libtorch
           export LD_LIBRARY_PATH=$LIBTORCH/lib
-          maturin build --release --features python -o /backend/python/app/wheels
+          maturin build --release --features python -o ../python/app/wheels
 
       - name: Configure git identity
         run: |
