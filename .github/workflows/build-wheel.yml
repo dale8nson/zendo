@@ -45,15 +45,21 @@ jobs:
           maturin build --release -o ../../python/app/wheels
 
       - name: Commit built wheel
+      - name: Configure git identity
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
-          run: |
-            if compgen -G "backend/python/app/wheels/*.whl" > /dev/null; then
-              git add backend/python/app/wheels/*.whl
-            else
-              echo "No wheel files to add."
-            fi
-          git commit -m "Add built wheel from CI"
+
+      - name: Add wheel if it exists
+        run: |
+          if compgen -G "backend/python/app/wheels/*.whl" > /dev/null; then
+            git add backend/python/app/wheels/*.whl
+          else
+            echo "No wheel files to add."
+          fi
+
+      - name: Commit and push wheel
+        run: |
+          git commit -m "Add built wheel from CI" || echo "Nothing to commit"
           git push
         continue-on-error: true
