@@ -64,6 +64,7 @@ jobs:
 
       - name: Add wheel file to git
         run: |
+          git lfs install
           git lfs track "backend/python/app/wheels/zendoai-0.1.0-cp312-cp312-manylinux_2_34_x86_64.whl"
           for wheel in ./backend/python/app/wheels/*.whl; do
             if [ -f "$wheel" ]; then
