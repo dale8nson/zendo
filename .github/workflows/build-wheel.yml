@@ -46,7 +46,7 @@ jobs:
         run: |
           export LIBTORCH=/opt/libtorch
           export LD_LIBRARY_PATH=$LIBTORCH/lib
-          maturin build --release --features python --interpreter python3.12
+          maturin build --release --features python -o ./wheels --interpreter python3.12
 
       - name: Git LFS setup and push built wheel
         run: |
@@ -55,7 +55,7 @@ jobs:
           git lfs install
           git lfs track "*.whl"
           echo "*.whl filter=lfs diff=lfs merge=lfs -text" >> .gitattributes
-          git add .gitattributes backend/rust/target/wheels/*.whl
+          git add .gitattributes backend/rust/wheels/*.whl
           git lfs uninstall
           git commit -m "Add built wheel with LFS" || echo "No changes to commit"
           git remote set-url origin https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ github.repository }}
