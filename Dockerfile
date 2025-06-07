@@ -43,7 +43,7 @@ RUN --mount=type=cache,id=cargo-registry,target=/root/.cargo/registry \
 
 RUN --mount=type=cache,id=cargo-registry,target=/root/.cargo/registry \
   --mount=type=cache,id=cargo-git,target=/root/.cargo/git \
-  curl -L https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-2.7.1%2Bcpu.zip -o libtorch.zip \
+  curl -L https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-2.7.0%2Bcpu.zip -o libtorch.zip \
   && unzip libtorch.zip -d /opt \
   && rm libtorch.zip
 # ENV LIBTORCH=/opt/libtorch
@@ -62,7 +62,7 @@ COPY backend/rust/src/python/python.rs    ./src/python/python.rs
 #   --mount=type=cache,id=cargo-git,target=/root/.cargo/git \
 RUN curl --mount=type=cache,id=cargo-registry,target=/root/.cargo/registry \
   --mount=type=cache,id=cargo-git,target=/root/.cargo/git \
-  curlhttps://sh.rustup.rs -sSf | sh -s -- -y
+  curl https://sh.rustup.rs -sSf | sh -s -- -y
 RUN . "$HOME/.cargo/env"
 RUN pip install maturin patchelf
 # RUN maturin build --release
@@ -82,7 +82,9 @@ RUN --mount=type=cache,id=cargo-registry,target=/root/.cargo/registry \
   --mount=type=cache,id=cargo-git,target=/root/.cargo/git \
   . "$HOME/.cargo/env" && \
   maturin build --release --features python
-RUN pip install target/wheels/*.whl
+RUN --mount=type=cache,id=cargo-registry,target=/root/.cargo/registry \
+  --mount=type=cache,id=cargo-git,target=/root/.cargo/git \
+  pip install target/wheels/*.whl
 
 # ──────────────── Stage C: python dependencies ────────────────
 #
