@@ -44,7 +44,6 @@ jobs:
           export LD_LIBRARY_PATH=$LIBTORCH/lib
           maturin build --release -o ../../python/app/wheels
 
-      - name: Commit built wheel
       - name: Configure git identity
         run: |
           git config user.name "github-actions"
