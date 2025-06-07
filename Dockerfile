@@ -142,7 +142,7 @@ WORKDIR /
 # RUN chmod +x /app/start-all.sh
 
 # Copy wheel from GitHub Actions artifact (see Note below)
-COPY backend/python/app/wheels/*.whl /tmp/
+COPY backend/rust/target/wheels/*.whl /tmp/
 RUN pip install /tmp/*.whl
 
 # 7) Mount static in your app.main:
