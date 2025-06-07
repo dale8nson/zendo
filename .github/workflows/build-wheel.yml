@@ -74,6 +74,8 @@ jobs:
 
           git add backend/python/app/wheels/*.whl
 
+          git lfs uninstall
+
           git commit -m "Add built wheel from CI" || echo "Nothing to commit"
 
           # Push using Personal Access Token
