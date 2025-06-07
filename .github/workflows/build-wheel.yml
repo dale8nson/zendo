@@ -1,30 +1,28 @@
-name: Build Python Wheel
-
-permissions:
-  contents: write
+name: Build Python Wheel and Push
 
 on:
   push:
     branches: [main]
-  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build-wheel:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Print CWD
-        run: pwd
-
-      - name: Checkout repository
+      - name: Checkout code with LFS
         uses: actions/checkout@v4
+        with:
+          lfs: true
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - name: Set up Rust toolchain
+      - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install system dependencies
@@ -43,59 +41,22 @@ jobs:
       - name: Install maturin
         run: pip install maturin
 
-      - name: Create wheels directory
-        run: mkdir -p /home/runner/work/zendo/zendo/backend/python/app/wheels
-
       - name: Build wheel with maturin
         working-directory: ./backend/rust
         run: |
           export LIBTORCH=/opt/libtorch
           export LD_LIBRARY_PATH=$LIBTORCH/lib
-          maturin build --release --features python -o /home/runner/work/zendo/zendo/backend/python/app/wheels
+          maturin build --release --features python -o ../python/app/wheels/
 
-      - name: Configure git identity
+      - name: Git LFS setup and push built wheel
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
-
-      - name: List wheel directory contents
-        working-directory: /home/runner/work/zendo/zendo/
-        run: ls -la
-
-      - name: Push built wheel using Git LFS
-        run: |
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-
           git lfs install
-          git lfs track "backend/python/app/wheels/*.whl"
-
-          git add backend/python/app/wheels/*.whl
-
-          git commit -m "Add built wheel from CI" || echo "Nothing to commit"
-
-          # Push using Personal Access Token
+          git lfs track "*.whl"
+          echo "*.whl filter=lfs diff=lfs merge=lfs -text" >> .gitattributes
+          git add .gitattributes backend/python/app/wheels/*.whl
+          git lfs uninstall
+          git commit -m "Add built wheel with LFS" || echo "No changes to commit"
           git remote set-url origin https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ github.repository }}
           git push origin HEAD:main
-
-        # - name: Upload built wheel as artifact
-        #   uses: actions/upload-artifact@v4
-        #   with:
-        #     name: zendoai-wheel
-        #     path: backend/python/app/wheels/*.whl
-
-        # - name: Download wheel artifact
-        #   uses: actions/download-artifact@v4
-        #   with:
-        #     name: zendoai-wheel
-        #     path: backend/python/app/wheels/
-
-        # - name: Deploy to Fly.io
-        #   uses: superfly/flyctl-actions@1.4
-        #   with:
-        #     args: deploy --config fly.toml --build-arg WHEEL_PATH=backend/python/app/wheels/*.whl
-        #   env:
-        #     FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-        #
-
-        continue-on-error: true
