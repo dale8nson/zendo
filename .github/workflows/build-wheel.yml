@@ -14,7 +14,7 @@ jobs:
 
     steps:
       - name: Print CWD
-        run: cwd
+        run: pwd
 
       - name: Checkout repository
         uses: actions/checkout@v4
