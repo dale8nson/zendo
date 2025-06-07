@@ -1,0 +1,40 @@
+name: Build and Commit Wheel
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build-wheel:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false # we'll use our own token
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build wheel using maturin
+        uses: PyO3/maturin-action@v1
+        with:
+          maturin-version: latest
+          manylinux: auto
+          args: --release --features python
+
+      - name: Copy wheel to repo folder
+        run: |
+          mkdir -p backend/python/dist
+          cp target/wheels/*.whl backend/python/dist/
+
+      - name: Commit and push wheel to repo
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add backend/python/dist/
+          git commit -m "🤖 Add built wheel for Fly.io deployment [skip ci]" || echo "Nothing to commit"
+          git push https://${{ secrets.GH_PAT }}@github.com/${{ github.repository }}.git HEAD:main

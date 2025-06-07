@@ -10,3 +10,5 @@ pyrightconfig.json
 target/
 .zed/
 .ropeproject/
+Dockerfile-old
+uploads/

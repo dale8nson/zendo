@@ -14,7 +14,7 @@ interface MetadataEntry {
 
 async function fetchImages(): Promise<MetadataEntry[]> {
   // const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'
-  const res = await fetch(`api/images`, {
+  const res = await fetch(`/api/images`, {
     headers: { 'Access-Control-Allow-Origin': '*' },
   })
   if (!res.ok) {
@@ -76,7 +76,7 @@ export const ImageGallery = () => {
             className="bg-zinc-900 rounded-xl shadow-lg border border-zinc-700 overflow-hidden "
           >
             <img
-              src={URL.createObjectURL(new Blob([Buffer.from(entry.image_data, 'base64')]))}
+              src={`/api/image/${entry.filename}`}
               alt={entry.label || entry.original_filename}
               className="w-full h-48 aspect-auto object-contain bg-gray-900"
             />
