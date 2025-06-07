@@ -41,14 +41,14 @@ jobs:
         run: pip install maturin
 
       - name: Create wheels directory
-        run: mkdir -p backend/python/app/wheels
+        run: mkdir -p ./backend/python/app/wheels
 
       - name: Build wheel with maturin
         working-directory: ./backend/rust
         run: |
           export LIBTORCH=/opt/libtorch
           export LD_LIBRARY_PATH=$LIBTORCH/lib
-          maturin build --release --features python -o backend/python/app/wheels
+          maturin build --release --features python -o /backend/python/app/wheels
 
       - name: Configure git identity
         run: |
@@ -56,11 +56,12 @@ jobs:
           git config user.email "github-actions@github.com"
 
       - name: List wheel directory contents
-        run: ls -la backend/python/app/wheels/
+        working-directory: /
+        run: ls -la
 
       - name: Add wheel file to git
         run: |
-          for wheel in backend/python/app/wheels/*.whl; do
+          for wheel in ./backend/python/app/wheels/*.whl; do
             if [ -f "$wheel" ]; then
               git add "$wheel"
             fi
