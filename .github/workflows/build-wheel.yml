@@ -72,6 +72,7 @@ jobs:
 
       - name: Commit and push wheel
         run: |
+          git lfs track "*.whl"
           git commit -m "Add built wheel from CI" || echo "Nothing to commit"
           git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }} HEAD:${{ github.ref }}
         continue-on-error: true
