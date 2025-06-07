@@ -1,5 +1,8 @@
 name: Build Python Wheel
 
+permissions:
+  contents: write
+
 on:
   push:
     branches: [main]
@@ -42,7 +45,7 @@ jobs:
         run: |
           export LIBTORCH=/opt/libtorch
           export LD_LIBRARY_PATH=$LIBTORCH/lib
-          maturin build --release -o ../../python/app/wheels
+          maturin build --release --features python -o backend/python/app/wheels
 
       - name: Configure git identity
         run: |
@@ -60,5 +63,5 @@ jobs:
       - name: Commit and push wheel
         run: |
           git commit -m "Add built wheel from CI" || echo "Nothing to commit"
-          git push
+          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }} HEAD:${{ github.ref }}
         continue-on-error: true
