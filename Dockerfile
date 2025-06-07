@@ -27,47 +27,49 @@ RUN   npm run build . -o out
 
 
 
-# FROM --platform=linux/amd64 python:3.12-slim AS rust-builder
+FROM --platform=linux/amd64 python:3.12-slim AS rust-builder
 
+ENV LIBTORCH=/opt/libtorch
+ENV LD_LIBRARY_PATH=$LIBTORCH/lib:$LD_LIBRARY_PATH
+
+WORKDIR /backend/rust
+
+# 1) Install OS‐level deps + rustup + maturin
+RUN --mount=type=cache,id=cargo-registry,target=/root/.cargo/registry \
+  --mount=type=cache,id=cargo-git,target=/root/.cargo/git \
+  apt-get update \
+  && apt-get install -y --no-install-recommends \
+  curl build-essential pkg-config libssl-dev unzip
+
+RUN --mount=type=cache,id=cargo-registry,target=/root/.cargo/registry \
+  --mount=type=cache,id=cargo-git,target=/root/.cargo/git \
+  curl -L https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-2.7.1%2Bcpu.zip -o libtorch.zip \
+  && unzip libtorch.zip -d /opt \
+  && rm libtorch.zip
 # ENV LIBTORCH=/opt/libtorch
 # ENV LD_LIBRARY_PATH=$LIBTORCH/lib:$LD_LIBRARY_PATH
 
-# WORKDIR /backend/rust
-
-# # 1) Install OS‐level deps + rustup + maturin
+COPY backend/rust/Cargo.toml     ./
+COPY backend/rust/Cargo.lock     ./
+COPY backend/rust/src/           ./
+COPY backend/rust/src/lib.rs     ./src/lib.rs
+COPY backend/rust/src/infer.rs   ./src/infer.rs
+COPY backend/rust/src/main.rs    ./src/main.rs
+COPY backend/rust/src/python/    ./src/python/
+COPY backend/rust/src/python/mod.rs    ./src/python/mod.rs
+COPY backend/rust/src/python/python.rs    ./src/python/python.rs
 # RUN --mount=type=cache,id=cargo-registry,target=/root/.cargo/registry \
 #   --mount=type=cache,id=cargo-git,target=/root/.cargo/git \
-#   apt-get update \
-#   && apt-get install -y --no-install-recommends \
-#   curl build-essential pkg-config libssl-dev unzip
-
-# RUN --mount=type=cache,id=cargo-registry,target=/root/.cargo/registry \
-#   --mount=type=cache,id=cargo-git,target=/root/.cargo/git \
-#   curl -L https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-2.7.1%2Bcpu.zip -o libtorch.zip \
-#   && unzip libtorch.zip -d /opt \
-#   && rm libtorch.zip
-# ENV LIBTORCH=/opt/libtorch
-# ENV LD_LIBRARY_PATH=$LIBTORCH/lib:$LD_LIBRARY_PATH
-
-# COPY backend/rust/Cargo.toml     ./
-# COPY backend/rust/Cargo.lock     ./
-# COPY backend/rust/src/           ./
-# COPY backend/rust/src/lib.rs     ./src/lib.rs
-# COPY backend/rust/src/infer.rs   ./src/infer.rs
-# COPY backend/rust/src/main.rs    ./src/main.rs
-# COPY backend/rust/src/python/    ./src/python/
-# COPY backend/rust/src/python/mod.rs    ./src/python/mod.rs
-# COPY backend/rust/src/python/python.rs    ./src/python/python.rs
-
-# RUN curl https://sh.rustup.rs -sSf | sh -s -- -y
-# RUN . "$HOME/.cargo/env"
-# RUN pip install maturin patchelf
+RUN curl --mount=type=cache,id=cargo-registry,target=/root/.cargo/registry \
+  --mount=type=cache,id=cargo-git,target=/root/.cargo/git \
+  curlhttps://sh.rustup.rs -sSf | sh -s -- -y
+RUN . "$HOME/.cargo/env"
+RUN pip install maturin patchelf
 # RUN maturin build --release
 # && pip install target/wheels/*.whl
-# RUN export PATH="$PATH:/$HOME/.cargo/bin"
+RUN export PATH="$PATH:/$HOME/.cargo/bin"
 
-# RUN --mount=type=cache,id=cargo-registry,target=/root/.cargo/registry \
-#   --mount=type=cache,id=cargo-git,target=/root/.cargo/git \
+
 #   && . "$HOME/.cargo/env" \
 #   && pip install maturin \
 #   maturin build --release -o dist \
@@ -76,11 +78,11 @@ RUN   npm run build . -o out
 # 3) Copy the rest of the Rust sources → rebuild (only if source changed)
 
 
-# RUN --mount=type=cache,id=cargo-registry,target=/root/.cargo/registry \
-#   --mount=type=cache,id=cargo-git,target=/root/.cargo/git \
-#   . "$HOME/.cargo/env" && \
-#   maturin build --release --features python
-# RUN pip install target/wheels/*.whl
+RUN --mount=type=cache,id=cargo-registry,target=/root/.cargo/registry \
+  --mount=type=cache,id=cargo-git,target=/root/.cargo/git \
+  . "$HOME/.cargo/env" && \
+  maturin build --release --features python
+RUN pip install target/wheels/*.whl
 
 # ──────────────── Stage C: python dependencies ────────────────
 #
@@ -154,5 +156,6 @@ RUN pip install /tmp/*.whl
 
 # CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
 #
+
 WORKDIR /app
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]

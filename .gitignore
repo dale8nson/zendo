@@ -12,3 +12,4 @@ target/
 .ropeproject/
 Dockerfile-old
 uploads/
+.github/
