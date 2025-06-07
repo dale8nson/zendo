@@ -55,13 +55,16 @@ jobs:
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
 
-      - name: Add wheel if it exists
+      - name: List wheel directory contents
+        run: ls -la backend/python/app/wheels/
+
+      - name: Add wheel file to git
         run: |
-          if compgen -G "backend/python/app/wheels/*.whl" > /dev/null; then
-            git add backend/python/app/wheels/*.whl
-          else
-            echo "No wheel files to add."
-          fi
+          for wheel in backend/python/app/wheels/*.whl; do
+            if [ -f "$wheel" ]; then
+              git add "$wheel"
+            fi
+          done
 
       - name: Commit and push wheel
         run: |
