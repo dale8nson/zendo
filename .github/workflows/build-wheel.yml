@@ -40,6 +40,9 @@ jobs:
       - name: Install maturin
         run: pip install maturin
 
+      - name: Create wheels directory
+        run: mkdir -p backend/python/app/wheels
+
       - name: Build wheel with maturin
         working-directory: ./backend/rust
         run: |
