@@ -87,4 +87,11 @@ jobs:
           name: zendoai-wheel
           path: backend/python/app/wheels/
 
+      - name: Deploy to Fly.io
+        uses: superfly/flyctl-actions@1.4
+        with:
+          args: deploy --config fly.toml --build-arg WHEEL_PATH=backend/python/app/wheels/*.whl
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
         continue-on-error: true
