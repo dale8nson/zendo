@@ -21,12 +21,7 @@ RUN pip install --upgrade pip && pip install -r requirements.txt
 # Copy backend code + model
 COPY backend/python/ .
 
-WORKDIR /backend/models/openclip/
-RUN python script_clip.py
-
-WORKDIR /app
-
-# COPY backend/python/models/openclip/ViT-B-32-scripted.pt /app/models/openclip/
+COPY backend/python/models/openclip/ViT-B-32-scripted.pt .
 
 # Debug space used by torch & model
 RUN pip show torch torchvision timm open_clip_torch || true
