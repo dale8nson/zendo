@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.4
 
-# ───── Stage 1: Frontend (Next.js) ─────
+# Stage 1: Build Next.js frontend
 FROM node:18-alpine AS frontend-builder
 WORKDIR /frontend
 COPY frontend/package*.json ./
@@ -8,73 +8,65 @@ RUN for i in 1 2 3; do npm ci && break || sleep 5; done
 COPY frontend/ .
 RUN npm run build . -o out
 
-# ───── Stage 2: Build Rust/Python wheel ─────
-
+# Stage 2: Build Rust/Python wheel
 FROM python:3.12-slim AS wheel-builder
 
-# Install system deps
-RUN apt-get update && \
-  apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get install -y --no-install-recommends \
   curl build-essential pkg-config libssl-dev patchelf unzip
 
-# Download libtorch (CPU, CXX11-ABI)
+# Download minimal libtorch (cannot easily trim more unless you build from source)
 RUN curl -L https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-2.7.0%2Bcpu.zip -o libtorch.zip \
-  && unzip libtorch.zip -d /opt
+  && unzip libtorch.zip -d /opt \
+  && rm libtorch.zip
 
 ENV LIBTORCH=/opt/libtorch
 ENV LD_LIBRARY_PATH=/opt/libtorch/lib
 
-# Install maturin
 RUN pip install maturin
 
-# Copy Rust source and manifest
 WORKDIR /backend/rust
 COPY backend/rust/ .
 
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y
 ENV PATH="/root/.cargo/bin:$PATH"
 
-# Build the wheel
 RUN maturin build --release --features python -o /tmp
 
-# ───── Stage 3: Python/Final ─────
+# Stage 3: Final image
 FROM python:3.12-slim AS final
 
-# System deps for FastAPI, Uvicorn, etc
+# FastAPI and runtime deps
 RUN apt-get update && \
   apt-get install -y --no-install-recommends git curl && \
   pip install --no-cache-dir fastapi uvicorn
 
-# Node.js (for serving Next.js static if needed)
-RUN apt-get update && apt-get install -y curl && \
-  curl -fsSL https://deb.nodesource.com/setup_18.x | bash - && \
-  apt-get install -y nodejs
-
-# Python venv
+# Create Python venv (best practice for Python images)
 ENV VIRTUAL_ENV=/opt/venv
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 RUN python -m venv /opt/venv
 
-# Copy and install Python dependencies
+# Install Python dependencies
 WORKDIR /app
 COPY backend/python/requirements.txt .
 RUN pip install --upgrade pip && pip install -r requirements.txt
 
-# Copy FastAPI app source
+# Copy app source (if this includes junk, filter more tightly)
 COPY backend/python/ .
 
-# Copy the Rust-built wheel from previous stage and install
+# Copy Rust wheel and install, then remove wheel to save space
 COPY --from=wheel-builder /tmp/*.whl /tmp/
-RUN pip install /tmp/*.whl
+RUN pip install /tmp/*.whl && rm /tmp/*.whl
 
-# Copy static Next.js build
+# Copy libtorch to final image (required for Rust extension)
+COPY --from=wheel-builder /opt/libtorch /opt/libtorch
+ENV LIBTORCH=/opt/libtorch
+ENV LD_LIBRARY_PATH=/opt/libtorch/lib
+
+# Copy static frontend
 COPY --from=frontend-builder /frontend/out /app/static
-COPY --from=frontend-builder /frontend/public /app/frontend/public
-COPY --from=frontend-builder /frontend/package.json /app/frontend/package.json
 
-# Assets
+# Copy assets if needed
 COPY assets /assets
 
-# Entrypoint
 WORKDIR /app
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
