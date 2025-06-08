@@ -9,6 +9,7 @@ COPY frontend/ .
 RUN npm run build . -o out
 
 # ───── Stage 2: Build Rust/Python wheel ─────
+
 FROM python:3.12-slim AS wheel-builder
 
 # Install system deps
@@ -29,6 +30,9 @@ RUN pip install maturin
 # Copy Rust source and manifest
 WORKDIR /backend/rust
 COPY backend/rust/ .
+
+RUN curl https://sh.rustup.rs -sSf | sh -s -- -y
+ENV PATH="/root/.cargo/bin:$PATH"
 
 # Build the wheel
 RUN maturin build --release --features python -o /tmp
