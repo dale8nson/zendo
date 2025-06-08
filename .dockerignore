@@ -6,6 +6,7 @@ __pycache__/
 *.log
 *.DS_Store
 .venv/
+backend/rust/
 backend/python/.mypy_cache/
 backend/python/venv/
 backend/python/app/wheels/
@@ -39,7 +40,6 @@ fly.toml
 
 # Artifacts
 *.zip
-*.pt
 *.whl
 
 # (keep assets, Dockerfile, etc)
