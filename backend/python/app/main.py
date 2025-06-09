@@ -20,7 +20,7 @@ cwd = os.getcwd()
 print(f"cwd: {cwd}")
 # app.mount("/assets", StaticFiles(directory=f"{cwd}/../../assets"), name="assets")
 #
-app.mount("/", StaticFiles(directory="static", html=True), name = "frontend")
+
 
 uploads_dir = os.path.join(os.getcwd(), "app/uploads")
 print(f"main.py: uploads_dir: {uploads_dir}")
@@ -45,7 +45,7 @@ app.include_router(predict.router, prefix="/api")
 app.include_router(images.router, prefix="/api")
 app.include_router(image.router, prefix="/api")
 
-
+app.mount("/", StaticFiles(directory="static", html=True), name = "frontend")
 # @app.get("/")
 # def serve_index():
 #     return StaticFiles(directory=os.path.join(cwd, "static")).lookup_path("index.html")
