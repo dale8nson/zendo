@@ -23,6 +23,7 @@ print(f"cwd: {cwd}")
 app.mount("/", StaticFiles(directory="static", html=True), name = "frontend")
 
 uploads_dir = os.path.join(os.getcwd(), "app/uploads")
+print(f"main.py: uploads_dir: {uploads_dir}")
 if os.path.exists(uploads_dir):
     app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
 else:
