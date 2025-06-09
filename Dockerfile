@@ -23,8 +23,10 @@ RUN pip install --upgrade pip && pip install -r requirements.txt
 COPY backend/python/ .
 
 COPY backend/models/openclip/ .
-RUN cd backend/models/openclip && \
-  python script_clip.py
+WORKDIR /app/backend/models/openclip
+RUN python script_clip.py
+
+WORKDIR /app
 
 # Debug space used by torch & model
 RUN pip show torch torchvision timm open_clip_torch || true
