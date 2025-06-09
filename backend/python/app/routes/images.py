@@ -20,6 +20,7 @@ def get_images():
             WHERE m2.filename = metadata.filename
         )
         """)
+    conn.commit()
     metadata = cursor.fetchall()
     print(f"metadata: {metadata}")
     conn.close()
