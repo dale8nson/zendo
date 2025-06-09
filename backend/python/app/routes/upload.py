@@ -6,19 +6,19 @@ import os
 from datetime import datetime
 import uuid
 from pathlib import Path
-
+from app.services.db import UPLOADS_DIR
 
 
 # from safetensors.torch import save_model
 
 router = APIRouter()
-HERE = Path(__file__).resolve().parent
-UPLOADS_DIR = HERE.parent / "uploads"
-UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+# HERE = Path(__file__).resolve().parent
+# UPLOADS_DIR = HERE.parent / "uploads"
+# UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
 @router.post("/upload")
 async def upload_image(file: UploadFile = File(...), label: str = Form(...)):
-    print(f"UPLOADS_DIR: {UPLOADS_DIR}")
+    print(f"{__file__}: UPLOADS_DIR: {UPLOADS_DIR}")
     original_filename = file.filename
     if original_filename:
         name, ext = os.path.splitext(original_filename)

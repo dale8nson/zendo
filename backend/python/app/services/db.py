@@ -13,7 +13,7 @@ def get_connection():
     Returns a sqlite3.Connection to zendoai.db. If the file did not exist, this function will create it and run init_db() to create the metadata table.
     """
 
-    print(f"DB_PATH: {DB_PATH}")
+    print(f"{__file__}:DB_PATH: {DB_PATH}")
     is_new_db = not DB_PATH.exists()
     print(f"Is new DB: {is_new_db}")
 
