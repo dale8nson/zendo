@@ -1,13 +1,14 @@
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 import os
-from email.policy import HTTP
+from app.services.db import UPLOADS_DIR
+
 
 
 
 router = APIRouter()
 
-UPLOADS_DIR = os.path.join(os.getcwd(), "app/uploads")
+# UPLOADS_DIR = os.path.join(os.getcwd(), "app/uploads")
 
 @router.get("/image/{filename}")
 async def get_uploaded_image(filename: str):
