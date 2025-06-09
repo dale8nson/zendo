@@ -26,6 +26,5 @@ size = "shared-cpu-2x"
 memory = "4gb"
 cpu_kind = "shared"
 cpus = 2
-
 [build.args]
 DOCKER_DEFAULT_PLATFORM = "linux/amd64"

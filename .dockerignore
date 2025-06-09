@@ -11,6 +11,7 @@ backend/python/.mypy_cache/
 backend/python/venv/
 backend/python/app/wheels/
 backend/rust/target/
+backend/python/app/uploads/
 benchmarks/
 
 # Node & Next.js
