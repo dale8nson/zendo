@@ -2,8 +2,23 @@
 
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 
 export const ImageUploadForm = ({ onUpload }: { onUpload?: () => void }) => {
+  const queryClient = useQueryClient()
+
+  const uploadMutation = useMutation({
+    mutationFn: async (formData: FormData) => {
+      return fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['images'] })
+    },
+  })
+
   const [image, setImage] = useState<File | null>(null)
   const [label, setLabel] = useState('')
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
