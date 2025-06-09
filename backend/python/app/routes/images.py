@@ -4,12 +4,14 @@ from app.services.db import get_connection, UPLOADS_DIR
 from pathlib import Path
 import base64
 from typing import Dict, List, Any
-
+import os
 
 router = APIRouter()
 
 @router.get("/images")
 def get_images():
+
+    print("Files in upload dir:", os.listdir(UPLOADS_DIR))
     conn = get_connection()
     cursor = conn.cursor()
     cursor = cursor.execute("""
@@ -23,6 +25,8 @@ def get_images():
     conn.close()
 
     results: List[Dict[str, Any]] = []
+
+    print(f"Fetched {len(metadata)} rows from DB")
 
     for datum in metadata:
         id_, filename, original_filename, label, prediction, timestamp = datum
