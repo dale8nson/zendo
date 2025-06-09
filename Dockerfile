@@ -13,6 +13,10 @@ RUN apt-get update && \
 ENV VIRTUAL_ENV=/opt/venv
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 RUN python -m venv /opt/venv
+
+
+
+
 WORKDIR /app
 
 COPY backend/python/requirements.txt .
@@ -22,6 +26,8 @@ RUN pip install --upgrade pip && pip install -r requirements.txt
 COPY backend/python/ .
 
 COPY backend/models/openclip/ .
+RUN cd /backend/models/openclip && \
+  python script_clip.py
 
 # Debug space used by torch & model
 RUN pip show torch torchvision timm open_clip_torch || true
@@ -29,5 +35,9 @@ RUN du -h -d 2 /app | sort -hr | head -30
 
 COPY --from=frontend-builder /frontend/out /app/static
 COPY assets /assets
+
+RUN du -h -d 3 /app | sort -hr | head -40
+RUN find /app -type f -size +100M
+RUN du -h -d 2 / | sort -hr | head -40
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
