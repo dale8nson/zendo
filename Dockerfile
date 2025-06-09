@@ -17,7 +17,8 @@ RUN python -m venv /opt/venv
 WORKDIR /app
 
 COPY backend/python/requirements.txt .
-RUN pip install --upgrade pip && pip install -r requirements.txt
+RUN pip install --upgrade pip && pip install -r requirements.txt && \
+  rm -rf /root/.cache /root/.local /tmp/pip* ~/.cache ~/.local
 
 # Copy backend code + model
 COPY backend/python/ .
