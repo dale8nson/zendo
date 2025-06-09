@@ -11,7 +11,7 @@ router = APIRouter()
 @router.get("/images")
 def get_images():
 
-    print("Files in upload dir:", os.listdir(UPLOADS_DIR))
+    print("Files in upload dir:", os.listdir(UPLOADS_DIR), flush=True)
     conn = get_connection()
     cursor = conn.cursor()
     cursor = cursor.execute("""
@@ -26,7 +26,7 @@ def get_images():
 
     results: List[Dict[str, Any]] = []
 
-    print(f"Fetched {len(metadata)} rows from DB")
+    print(f"Fetched {len(metadata)} rows from DB", flush=True)
 
     for datum in metadata:
         id_, filename, original_filename, label, prediction, timestamp = datum
