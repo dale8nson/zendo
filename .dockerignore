@@ -41,5 +41,6 @@ fly.toml
 # Artifacts
 *.zip
 *.whl
+*.pt
 
 # (keep assets, Dockerfile, etc)
