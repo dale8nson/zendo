@@ -22,8 +22,9 @@ RUN pip install --upgrade pip && pip install -r requirements.txt
 # Copy backend code + model
 COPY backend/python/ .
 
-COPY backend/models/openclip/ .
-WORKDIR /backend/models/openclip
+RUN mkdir -p /app/backend/models/openclip
+COPY backend/models/openclip/ /app/backend/models/openclip/
+WORKDIR /app/backend/models/openclip
 RUN python script_clip.py
 
 WORKDIR /app
