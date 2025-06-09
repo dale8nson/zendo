@@ -14,9 +14,6 @@ ENV VIRTUAL_ENV=/opt/venv
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 RUN python -m venv /opt/venv
 
-
-
-
 WORKDIR /app
 
 COPY backend/python/requirements.txt .
@@ -26,7 +23,7 @@ RUN pip install --upgrade pip && pip install -r requirements.txt
 COPY backend/python/ .
 
 COPY backend/models/openclip/ .
-RUN cd /backend/models/openclip && \
+RUN cd backend/models/openclip && \
   python script_clip.py
 
 # Debug space used by torch & model
