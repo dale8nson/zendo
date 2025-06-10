@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
 
 export const ImageUploadForm = ({ onUpload }: { onUpload?: () => void }) => {
   const queryClient = useQueryClient()
@@ -60,14 +61,26 @@ export const ImageUploadForm = ({ onUpload }: { onUpload?: () => void }) => {
     if (!res.ok) {
       console.error(`Upload failed: ${res.status} ${res.statusText}`)
     } else {
-      if (typeof onUpload === 'function') {
-        onUpload()
-      }
-      alert('Upload successful!')
-      setImage(null)
-      setPreviewUrl(null)
-      setLabel('')
-      setUploading(false)
+      uploadMutation.mutate(formData, {
+        onSuccess: () => {
+          if (typeof onUpload === 'function') {
+            toast.success('Upload successful')
+            onUpload()
+          }
+          // alert('Upload successful!');
+          setImage(null)
+          setPreviewUrl(null)
+          setLabel('')
+          setUploading(false)
+        },
+        onError: (error: any) => {
+          setUploading(false)
+          alert('Upload failed.')
+          console.error(error)
+        },
+      })
+
+      setUploading(true)
     }
   }
 
@@ -113,11 +126,8 @@ export const ImageUploadForm = ({ onUpload }: { onUpload?: () => void }) => {
         value={label}
         onChange={(e) => setLabel(e.target.value)}
       />
-      <button
-        type="submit"
-        className="w-full py-2 px-4 rounded-md text-white bg-gradient-to-br from-gray-800 to-black hover:from-black hover:to-gray-900"
-      >
-        Upload
+      <button type="submit" className="..." disabled={uploadMutation.isPending}>
+        {uploadMutation.isPending ? 'Uploading...' : 'Upload'}
       </button>
     </form>
   )

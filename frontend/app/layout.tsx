@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import './globals.css'
 import { Providers } from './providers'
+import { Toaster } from 'sonner'
 
 export const metadata: Metadata = {
   title: 'ZendoAI',
@@ -16,7 +17,10 @@ export default function RootLayout({
   return (
     <html lang="en" className="w-screen h-screen">
       <body className={'w-screen h-screen md:w-screen md:h-screen antialiased'}>
-        <Providers>{children}</Providers>
+        <Providers>
+          {children}
+          <Toaster position="top-right" />
+        </Providers>
       </body>
     </html>
   )
