@@ -28,3 +28,7 @@ cpu_kind = "shared"
 cpus = 2
 [build.args]
 DOCKER_DEFAULT_PLATFORM = "linux/amd64"
+
+[mounts]
+source = "zendo_uploads"
+destination = "/app/app/uploads"
