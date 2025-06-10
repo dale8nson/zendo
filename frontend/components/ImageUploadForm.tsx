@@ -126,7 +126,11 @@ export const ImageUploadForm = ({ onUpload }: { onUpload?: () => void }) => {
         value={label}
         onChange={(e) => setLabel(e.target.value)}
       />
-      <button type="submit" className="..." disabled={uploadMutation.isPending}>
+      <button
+        type="submit"
+        className="w-full py-2 px-4 rounded-md text-white bg-gradient-to-br from-gray-800 to-black hover:from-black hover:to-gray-900"
+        disabled={uploadMutation.isPending}
+      >
         {uploadMutation.isPending ? 'Uploading...' : 'Upload'}
       </button>
     </form>
