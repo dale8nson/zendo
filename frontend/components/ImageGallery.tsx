@@ -76,7 +76,7 @@ export const ImageGallery = () => {
             className="bg-zinc-900 rounded-xl shadow-lg border border-zinc-700 overflow-hidden "
           >
             <img
-              src={`/api/image/${entry.filename}`}
+              src={entry.image_data}
               alt={entry.label || entry.original_filename}
               className="w-full h-48 aspect-auto object-contain bg-gray-900"
             />
