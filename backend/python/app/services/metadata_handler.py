@@ -13,7 +13,7 @@ def log_prediction_to_db(filename: str, label: str, scores: list[float]):
             (filename, label, json.dumps(scores)),
         )
 
-def save_metadata_entry(entry: Dict, conn=None) -> None:
+async def save_metadata_entry(entry: Dict, conn=None) -> None:
     if conn is None:
         conn = get_connection()
     cursor = conn.cursor()

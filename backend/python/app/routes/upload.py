@@ -43,7 +43,7 @@ async def upload_image(file: UploadFile = File(...), label: str = Form(...)):
         }
 
         print(metadata)
-        save_metadata_entry(metadata)
+        await save_metadata_entry(metadata)
 
         return JSONResponse(content={"status": "success", "filename": file.filename, "label": label})
     except Exception as e:
