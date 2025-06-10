@@ -16,7 +16,7 @@ export const ImageUploadForm = ({ onUpload }: { onUpload?: () => void }) => {
       })
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['images'] })
+      queryClient.invalidateQueries({ queryKey: ['images'], refetchType: 'all' })
     },
   })
 
@@ -64,7 +64,7 @@ export const ImageUploadForm = ({ onUpload }: { onUpload?: () => void }) => {
         setPreviewUrl(null)
         setLabel('')
         setUploading(false)
-        queryClient.invalidateQueries({ queryKey: ['images'] })
+        queryClient.invalidateQueries({ queryKey: ['images'], refetchType: 'all' })
       },
       onError: (error: any) => {
         setUploading(false)
