@@ -32,4 +32,4 @@ DOCKER_DEFAULT_PLATFORM = "linux/amd64"
 
 [[mounts]]
 source = "zendo_uploads"
-destination = "/app/uploads"
+destination = "/app/app/uploads"
