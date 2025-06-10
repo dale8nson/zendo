@@ -58,11 +58,13 @@ export const ImageUploadForm = ({ onUpload }: { onUpload?: () => void }) => {
         if (typeof onUpload === 'function') {
           onUpload()
         }
-        alert('Upload successful!')
+        // alert('Upload successful!')
+        toast.success('Upload successful!')
         setImage(null)
         setPreviewUrl(null)
         setLabel('')
         setUploading(false)
+        queryClient.invalidateQueries({ queryKey: ['images'] })
       },
       onError: (error: any) => {
         setUploading(false)
