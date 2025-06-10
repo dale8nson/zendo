@@ -47,41 +47,31 @@ export const ImageUploadForm = ({ onUpload }: { onUpload?: () => void }) => {
 
   const handleUpload = async () => {
     if (!image) return
-    setUploading(true)
 
     const formData = new FormData()
     formData.append('file', image)
     formData.append('label', label)
 
-    const res = await fetch('/api/upload', {
-      method: 'POST',
-      body: formData,
+    // This triggers the mutation (and its onSuccess, which invalidates the images query)
+    uploadMutation.mutate(formData, {
+      onSuccess: () => {
+        if (typeof onUpload === 'function') {
+          onUpload()
+        }
+        alert('Upload successful!')
+        setImage(null)
+        setPreviewUrl(null)
+        setLabel('')
+        setUploading(false)
+      },
+      onError: (error: any) => {
+        setUploading(false)
+        alert('Upload failed.')
+        console.error(error)
+      },
     })
 
-    if (!res.ok) {
-      console.error(`Upload failed: ${res.status} ${res.statusText}`)
-    } else {
-      uploadMutation.mutate(formData, {
-        onSuccess: () => {
-          if (typeof onUpload === 'function') {
-            toast.success('Upload successful')
-            onUpload()
-          }
-          // alert('Upload successful!');
-          setImage(null)
-          setPreviewUrl(null)
-          setLabel('')
-          setUploading(false)
-        },
-        onError: (error: any) => {
-          setUploading(false)
-          alert('Upload failed.')
-          console.error(error)
-        },
-      })
-
-      setUploading(true)
-    }
+    setUploading(true) // Optional: If you want to show loading UI while uploadMutation is pending
   }
 
   return (
