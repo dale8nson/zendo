@@ -2,14 +2,15 @@
 
 import { useAppSelector } from '@/lib/hooks'
 import { useEffect, useRef } from 'react'
-import { MetadataEntry } from './ImageGallery'
+import type { MetadataEntry } from './ImageGallery'
 
 export const ImageEditor = () => {
-  const selectedImage: MetadataEntry | null = useAppSelector((state) => state.imageEditor.image)
+  let selectedImage: MetadataEntry | null = useAppSelector((state) => state.imageEditor.image)
   const canvas = useRef<HTMLCanvasElement>(null)
 
   useEffect(() => {
     if (!selectedImage || !canvas.current) return
+    selectedImage = selectedImage as MetadataEntry
     const canv = canvas.current as HTMLCanvasElement
     const ctx = canv.getContext('2d')
     const { width, height } = canvas.current.getBoundingClientRect()

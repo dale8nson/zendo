@@ -12,6 +12,8 @@ export interface MetadataEntry {
   prediction: string | null
   timestamp: string
   image_data: string
+  width: number
+  height: number
 }
 
 async function fetchImages(): Promise<MetadataEntry[]> {
