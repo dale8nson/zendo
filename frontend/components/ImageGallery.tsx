@@ -1,8 +1,10 @@
 'use client'
 
 import { useQuery, queryOptions } from '@tanstack/react-query'
+import { useAppStore, useAppDispatch, useAppSelector } from '@/lib/hooks'
+import { setSelectedImage } from '@/lib/features/image-editor/imageEditorSlice'
 
-interface MetadataEntry {
+export interface MetadataEntry {
   id: number
   filename: string
   original_filename: string
@@ -24,6 +26,8 @@ async function fetchImages(): Promise<MetadataEntry[]> {
 }
 
 export const ImageGallery = () => {
+  const dispatch = useAppDispatch()
+
   const {
     data: entries,
     error,
@@ -68,17 +72,18 @@ export const ImageGallery = () => {
 
   return (
     <div className="max-w-[1200px] mx-auto px-4 py-8">
-      <h2 className="text-2xl font-semidbold mb-4 text-center text-white">Uploaded Images</h2>
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 w-full">
+      <h2 className="text-2xl font-semibold mb-4 text-center text-white">Uploaded Images</h2>
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 gap-6 w-full">
         {entries.map((entry) => (
           <div
             key={entry.filename}
-            className="bg-zinc-900 rounded-xl shadow-lg border border-zinc-700 overflow-hidden "
+            className="bg-zinc-900 rounded-xl shadow-lg border border-zinc-700 overflow-hidden hover:scale-110 transition-transform duration-300 w-full h-auto"
+            onClick={() => dispatch(setSelectedImage(entry))}
           >
             <img
-              src={`data:image/entry.filename.split('.').pop();base64,${entry.image_data}`}
+              src={`data:image/${entry.filename.split('.').pop()};base64,${entry.image_data}`}
               alt={entry.label || entry.original_filename}
-              className="w-full h-48 aspect-auto object-contain bg-gray-900"
+              className="w-full h-48 aspect-auto object-cover bg-gray-900 object-top"
             />
             <div className="p-3">
               <p className="text-sm text-gray-200 truncate">{entry.label || 'No label'}</p>

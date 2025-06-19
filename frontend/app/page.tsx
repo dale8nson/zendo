@@ -5,15 +5,14 @@
 import { ImageUploadForm } from '@/components/ImageUploadForm'
 import { ImageGallery } from '@/components/ImageGallery'
 import { Logo } from '@/components/Logo'
+import { Ribbon } from '@/components/Ribbon'
+import { ImageEditor } from '@/components/ImageEditor'
 
 export default function HomePage() {
   return (
     <main className="flex flex-col h-screen w-screen bg-gradient-to-br from-black via-zinc-900 to-neutral-800 text-white">
-      {/* Top Ribbon Placeholder */}
-      <header className="h-12 bg-neutral-950 border-b border-neutral-800 flex items-center px-4 text-sm w-full">
-        <span className="text-neutral-400 italic">
-          TODO: Ribbon (File, Edit, View, Model, Help)
-        </span>
+      <header className="h-12 bg-neutral-950  flex items-center text-sm w-full m-0">
+        <Ribbon />
       </header>
 
       {/* 3-Panel Layout */}
@@ -32,6 +31,7 @@ export default function HomePage() {
           <div className="absolute top-0 left-0 w-full m-auto h-full flex items-center justify-center text-neutral-500 text-lg italic">
             <p className="text-center">TODO: Canvas Editor + Predicted Label Display</p>
           </div>
+          <ImageEditor />
         </section>
 
         {/* Right Panel – Transform / Metadata Placeholder */}
