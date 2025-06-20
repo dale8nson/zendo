@@ -26,6 +26,7 @@ export const ImageEditor = () => {
     )
 
     const drawImage = () => {
+      console.log(`drawImage`)
       ctx?.clearRect(0, 0, width, height)
       ctx?.drawImage(
         image,
@@ -40,7 +41,19 @@ export const ImageEditor = () => {
       )
     }
 
-    image.onload = drawImage
+    image.onload = () => {
+      drawImage()
+    }
+
+    const observer = new ResizeObserver((entries, target) => {
+      // console.log(
+      //   `canvas.width: ${target || canv.width}, canvas.height: ${canvas.current.height || canv.height}`
+      // )
+      canv.width = entries[0].borderBoxSize[0].inlineSize
+      canv.height = entries[0].borderBoxSize[0].blockSize
+      drawImage()
+    })
+    observer.observe(canvas.current)
 
     image.onerror = () => {
       console.error('Failed to load image')
