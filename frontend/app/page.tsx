@@ -28,9 +28,6 @@ export default function HomePage() {
         {/* Center Panel – Image Editor Placeholder */}
         <section className="relative flex-1 flex-col items-center justify-center border-r border-neutral-800 bg-fill bg-blend-overlay bg-no-repeat bg-center h-full w-3/5 aspect-square">
           <Logo />
-          <div className="absolute top-0 left-0 w-full m-auto h-full flex items-center justify-center text-neutral-500 text-lg italic">
-            <p className="text-center">TODO: Canvas Editor + Predicted Label Display</p>
-          </div>
           <ImageEditor />
         </section>
 
