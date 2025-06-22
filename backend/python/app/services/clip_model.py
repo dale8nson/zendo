@@ -4,6 +4,7 @@ from open_clip.transform import Compose
 from PIL import Image, ImageFile
 from torchvision import transforms
 import os
+from pathlib import Path
 from typing import cast
 import json
 import numpy as np
@@ -41,6 +42,7 @@ async def init_model():
     global class_names, text_prompts, embedded_text_features
     class_names = ["Korean woman wearing a white baseball cap, with a plush elephant toy attached at her waist, holding a gun", "Korean woman wearing a white baseball cap","asian", "asian woman", "black model walking on catwalk", "south asian man wearing a striped blue and green knitted cardiagn and orange trousers", "high fashion", "male asian high fashion model wearing an impractical grey suit"]
     text_prompts = [f"a photo of a {label}" for label in class_names]
+
     if os.path.exists(f"{os.getcwd()}/../models/openclip/embeddings.npy"):
         print("Loading embeddings...")
         embedded_text_features = torch.from_numpy(np.load(f"{os.getcwd()}/../models/openclip/embeddings.npy")).to(device)
@@ -67,7 +69,10 @@ async def init_model():
         print("Number of prompts:", len(text_prompts))
         print("Shape of embeddings:", embedded_text_features.shape)
         print("Model initialized.")
-        np.save(f"{os.getcwd()}/../models/openclip/embeddings.npy", embedded_text_features.cpu().numpy())
+        embeddings_path = os.path.join(os.getcwd(), "../models/openclip/embeddings.npy")
+        embeddings_dir = os.path.dirname(embeddings_path)
+        Path(embeddings_dir).mkdir(parents=True, exist_ok=True)
+        np.save(embeddings_path, embedded_text_features.cpu().numpy())
 
 # with open(f"{os.getcwd()}/../models/openclip/vocab.json", "r") as f:
 #     obj = json.load(f)
