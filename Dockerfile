@@ -22,7 +22,7 @@ RUN pip install --upgrade pip && pip install -r requirements.txt && \
 
 # Copy backend code + model
 COPY backend/python/ .
-COPY backend/models .
+
 
 RUN mkdir -p /app/backend/models/openclip
 COPY backend/models/openclip/ /app/backend/models/openclip/
@@ -30,7 +30,7 @@ WORKDIR /app/backend/models/openclip
 RUN python script_clip.py
 
 WORKDIR /app
-
+COPY backend/models .
 # Debug space used by torch & model
 RUN pip show torch torchvision timm open_clip_torch || true
 RUN du -h -d 2 /app | sort -hr | head -30
