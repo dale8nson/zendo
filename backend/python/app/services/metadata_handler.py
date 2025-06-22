@@ -1,16 +1,14 @@
 import json
-import os
-from datetime import datetime
-from typing import List, Dict
+from typing import Dict
 import sqlite3
 from app.services.db import DB_PATH, get_connection
 
 
-def log_prediction_to_db(filename: str, label: str, scores: list[float]):
+def log_prediction_to_db(filename: str, original_filename: str, label: str, scores: list[float], width: int, height: int):
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute(
-            "INSERT INTO metadata (filename, label, scores) VALUES(?, ?, ?)",
-            (filename, label, json.dumps(scores)),
+            "INSERT INTO metadata (filename, original_filename, label, scores, width, height) VALUES(?, ?, ?, ?, ?, ?)",
+            (filename, original_filename, label, json.dumps(scores), width, height),
         )
 
 async def save_metadata_entry(entry: Dict, conn=None) -> None:
@@ -18,8 +16,8 @@ async def save_metadata_entry(entry: Dict, conn=None) -> None:
         conn = get_connection()
     cursor = conn.cursor()
     cursor.execute(
-        "INSERT INTO metadata (filename, original_filename, label) VALUES(?, ?, ?)",
-        (entry["filename"], entry["original_filename"], entry["label"])
+        "INSERT INTO metadata (filename, original_filename, label, width, height) VALUES(?, ?, ?, ?, ?)",
+        (entry["filename"], entry["original_filename"], entry["label"], entry["width"], entry["height"])
     )
     conn.commit()
     cursor.close()

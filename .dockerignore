@@ -31,6 +31,7 @@ frontend/**/.pnpm-debug.log*
 frontend/**/*.tsbuildinfo
 frontend/**/next-env.d.ts
 frontend/.vercel/
+frontend/app/api/
 
 # Git, env
 .git/
@@ -43,5 +44,6 @@ fly.toml
 *.zip
 *.whl
 *.pt
+
 
 # (keep assets, Dockerfile, etc)

@@ -5,9 +5,6 @@ import os
 from app.services.clip_model import predict_clip_image
 from app.services.metadata_handler import log_prediction_to_db
 from PIL import Image
-from logging import Filter
-from datetime import datetime
-
 
 UPLOAD_DIR = "app/uploads"
 
@@ -47,14 +44,19 @@ class TransformParams(BaseModel):
     scale: float = 1.0
     fit: Literal["cover", "contain"] = "contain"
 
-
 class PredictRequest(BaseModel):
+    id: int
     filename: str
+    original_filename: str
+    label: Optional[str] = None
+    timestamp: str
+    image_data: str
+    width: int
+    height: int
     transform: Optional[TransformParams] = None
 
-
 @router.post("/predict")
-def predict_image(data: PredictRequest):
+async def predict_image(data: PredictRequest):
     image_path = os.path.join(UPLOAD_DIR, data.filename)
 
     if not os.path.exists(image_path):
@@ -62,20 +64,28 @@ def predict_image(data: PredictRequest):
 
     image = Image.open(image_path)
 
-    if data.transform:
-        image = crop_and_resize(
-            image,
-            x=data.transform.x,
-            y=data.transform.y,
-            scale=data.transform.scale,
-            fit=data.transform.fit,
-        )
+    print("Transform provided:", data.transform)
+    print("Fallback width:", data.width, "height:", data.height)
 
-    class_names = ["paint", "wall", "house", "interior", "plaster"]
-    result = predict_clip_image(image, class_names)
+    # if data.transform:
+    #     image = crop_and_resize(
+    #         image,
+    #         x=data.transform.x,
+    #         y=data.transform.y,
+    #         scale=data.transform.scale,
+    #         fit=data.transform.fit,
+    #     )
+    # else:
+    #     image = crop_and_resize(image,x=224 / 2 - data.width / 2, y=224 / 2 - data.height / 2, scale=1, fit="contain")
+
+    result = await predict_clip_image(image)
+
+    print(f"result: {result}")
+
+    print(f"Prediction result: {result['predicted']}")
 
     log_prediction_to_db(
-        data.filename, result.get("predicted", ""), result.get("scores", [])
+        data.filename, data.original_filename, result.get("predicted", ""), result.get("scores", []), data.width, data.height
     )
 
     return result

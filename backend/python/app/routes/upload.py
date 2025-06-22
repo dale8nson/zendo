@@ -5,8 +5,8 @@ from app.services.metadata_handler import save_metadata_entry
 import os
 from datetime import datetime
 import uuid
-from pathlib import Path
 from app.services.db import UPLOADS_DIR
+from PIL import Image
 
 
 # from safetensors.torch import save_model
@@ -35,11 +35,16 @@ async def upload_image(file: UploadFile = File(...), label: str = Form(...)):
 
         with open(save_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
+        with Image.open(file.file) as img:
+            width, height = img.size
+            print(f"img width:{width}, height:{height}")
         metadata = {
             "filename": new_filename,
             "label": label,
             "timestamp": datetime.utcnow().isoformat(),
-            "original_filename": original_filename
+            "original_filename": original_filename,
+            "width": width,
+            "height": height
         }
 
         print(metadata)

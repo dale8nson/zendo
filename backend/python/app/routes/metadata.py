@@ -9,6 +9,6 @@ router = APIRouter()
 def get_metadata():
     with sqlite3.connect(DB_PATH) as conn:
         conn.row_factory = sqlite3.Row
-        cursor = conn.execute("SELECT * FROM predictions ORDER BY timestamp DESC")
+        cursor = conn.execute("SELECT * FROM metadata ORDER BY timestamp DESC")
         rows = cursor.fetchall()
         return [dict(row) for row in rows]

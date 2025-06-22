@@ -1,12 +1,44 @@
 'use client'
 
 import { useAppSelector } from '@/lib/hooks'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { MetadataEntry } from './ImageGallery'
+import { useQuery, queryOptions } from '@tanstack/react-query'
+
+const predict = async (data: MetadataEntry | null) => {
+  const response = await fetch('/api/predict', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Access-Control-Allow-Origin': '*',
+    },
+    body: JSON.stringify(data),
+  })
+  return await response.json()
+}
+
+const caption = async (data: MetadataEntry | null) => {
+  const response = await fetch('/api/caption', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Access-Control-Allow-Origin': '*',
+    },
+    body: JSON.stringify(data),
+  })
+  return await response.json()
+}
 
 export const ImageEditor = () => {
   let selectedImage: MetadataEntry | null = useAppSelector((state) => state.imageEditor.image)
   const canvas = useRef<HTMLCanvasElement>(null)
+
+  const { data, isLoading } = useQuery(
+    queryOptions({
+      queryKey: ['prediction', selectedImage?.id],
+      queryFn: () => caption(selectedImage ? selectedImage : null),
+    })
+  )
 
   useEffect(() => {
     if (!selectedImage || !canvas.current) return
@@ -60,9 +92,25 @@ export const ImageEditor = () => {
     }
   }, [selectedImage])
 
+  if (data) {
+    console.log(data)
+  }
+
   return (
-    <div className="flex flex-col items-center justify-center w-full h-full">
-      <canvas ref={canvas} className="absolute top-0 left-0 w-full h-full" />
-    </div>
+    <>
+      {selectedImage ? (
+        <div className=" absolute top-0 left-0 flex flex-col items-center justify-center w-full h-full  border-2 border-solid border-neutral-950 bg-black/80">
+          <div className="flex items-center justify-center w-full bg-neutral-900  p-2">
+            <h1 className="text-2xl font-bold text-white">
+              {selectedImage?.original_filename as string}
+            </h1>
+          </div>
+          <canvas ref={canvas} className="top-0 left-0 w-full h-full" />
+          <div className="flex items-center justify-center w-full bg-neutral-900  p-2">
+            <h1 className="text-2xl font-bold text-white">{data ? data.caption : 'Loading...'}</h1>
+          </div>
+        </div>
+      ) : null}
+    </>
   )
 }

@@ -5,7 +5,13 @@ from PIL import Image, ImageFile
 from torchvision import transforms
 import os
 from typing import cast
+import json
+import numpy as np
 
+BATCH_SIZE = 256
+
+global embedded_text_features
+global class_names, text_prompts
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -31,22 +37,72 @@ tokenizer = open_clip.get_tokenizer("ViT-B-32")
 model = model.to(device)
 model.eval()
 
+async def init_model():
+    global class_names, text_prompts, embedded_text_features
+    class_names = ["Korean woman wearing a white baseball cap, with a plush elephant toy attached at her waist, holding a gun", "Korean woman wearing a white baseball cap","asian", "asian woman", "black model walking on catwalk", "south asian man wearing a striped blue and green knitted cardiagn and orange trousers", "high fashion", "male asian high fashion model wearing an impractical grey suit"]
+    text_prompts = [f"a photo of a {label}" for label in class_names]
+    if os.path.exists(f"{os.getcwd()}/../models/openclip/embeddings.npy"):
+        print("Loading embeddings...")
+        embedded_text_features = torch.from_numpy(np.load(f"{os.getcwd()}/../models/openclip/embeddings.npy")).to(device)
+        print("Text embedding std deviation:", embedded_text_features.std().item())
+        print("Number of prompts:", len(text_prompts))
+        print("Shape of embeddings:", embedded_text_features.shape)
+
+    else:
+        print("Initializing model...")
+        print("Loading vocabulary...")
+        with torch.no_grad():
+            print("Encoding text features...")
+            text_features = []
+            for i in range(0, len(text_prompts), BATCH_SIZE):
+                print(f"Processing batch {(i // BATCH_SIZE) + 1} / {(len(text_prompts)//BATCH_SIZE) + 1}...")
+                batch_prompts = text_prompts[i:i+BATCH_SIZE]
+                batch_text_tokens = tokenizer(batch_prompts)
+                batch_text_features = model.encode_text(batch_text_tokens)
+                batch_text_features /= batch_text_features.norm(dim=-1, keepdim=True)
+                text_features.append(batch_text_features)
+        print("Concatenating text features...")
+        embedded_text_features = torch.cat(text_features, dim=0).to(device)
+        print("Text embedding std deviation:", embedded_text_features.std().item())
+        print("Number of prompts:", len(text_prompts))
+        print("Shape of embeddings:", embedded_text_features.shape)
+        print("Model initialized.")
+        np.save(f"{os.getcwd()}/../models/openclip/embeddings.npy", embedded_text_features.cpu().numpy())
+
+# with open(f"{os.getcwd()}/../models/openclip/vocab.json", "r") as f:
+#     obj = json.load(f)
+#     class_names = [key for (key, _) in obj.items()]
+#     text_prompts = [f"a photo of a {label}" for label in class_names]
+
+# with torch.no_grad():
+#     text_tokens = tokenizer(text_prompts)
+#     text_features = model.encode_text(text_tokens)
+#     text_features /= text_features.norm(dim=-1, keepdim=True)
+
+
 UPLOAD_DIR = "app/uploads"
 
-
-def predict_clip_image(image: Image.Image, class_names: list[str]) -> dict:
+async def predict_clip_image(image: Image.Image) -> dict:
+    global embedded_text_features
+    if embedded_text_features is None:
+        raise RuntimeError("Model has not been initialised. Please run init_model() first.")
+    print("Image size:", image.size)
+    print("Image mode:", image.mode)
     img_tensor = cast(torch.Tensor, preprocess_val(image))
     img_tensor = img_tensor.unsqueeze(0).to(device)
+    print("Sum of image tensor:", img_tensor.sum().item())
 
     with torch.no_grad():
         image_features = model.encode_image(img_tensor)
-        text_tokens = tokenizer(class_names).to(device)
-        text_features = model.encode_text(text_tokens)
-
         image_features /= image_features.norm(dim=-1, keepdim=True)
-        text_features /= text_features.norm(dim=-1, keepdim=True)
-
-        similarity = (100.0 * image_features @ text_features.T).softmax(dim=-1)
-
-    best_idx = cast(int, cast(torch.Tensor, similarity)[0].argmax().item())
-    return {"predicted": class_names[best_idx], "scores": similarity[0].tolist()}
+        print("image_features dtype:", image_features.dtype, "device:", image_features.device)
+        print("text_features dtype:", embedded_text_features.dtype, "device:", embedded_text_features.device)
+        similarity = (100.0 *  image_features @ embedded_text_features.T)
+        # similarity = text_features.cpu().numpy() @ image_features.cpu().numpy().T
+    global text_prompts
+    best_idx = cast(int, similarity[0].argmax().item())
+    print(f"Predicted class: {text_prompts[best_idx]}")
+    top_probs, top_idxs = similarity[0].topk(5)
+    for i in range(5):
+        print(f"{text_prompts[top_idxs[i]]}: {top_probs[i].item():.2f}")
+    return {"predicted": text_prompts[best_idx], "scores": similarity[0].tolist()[0:4]}

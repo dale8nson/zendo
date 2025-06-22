@@ -1,6 +1,5 @@
 import sqlite3
 from pathlib import Path
-import os
 
 HERE = Path(__file__).resolve().parent
 UPLOADS_DIR = HERE.parent / "uploads"
@@ -34,8 +33,22 @@ def init_db(conn=None):
     original_filename TEXT NOT NULL,
     label TEXT,
     scores TEXT,
-    timestamp TEXT DEFAULT CURRENT_TIMESTAMP
+    timestamp TEXT DEFAULT CURRENT_TIMESTAMP,
+    width INTEGER,
+    height INTEGER
     )"""
     )
+    conn.commit()
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS prompts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        text TEXT NOT NULL,
+        source TEXT DEFAULT 'manual',
+        is_active INTEGER DEFAULT 1,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT
+        )
+        """)
     conn.commit()
     cursor.close()
