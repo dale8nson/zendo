@@ -13,3 +13,4 @@ target/
 Dockerfile-old
 uploads/
 *.pt
+frontend/app/api/
