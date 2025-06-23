@@ -60,16 +60,22 @@ export const ImageEditor = () => {
     const drawImage = () => {
       console.log(`drawImage`)
       ctx?.clearRect(0, 0, width, height)
+      console.log(`canvas.width: ${canv.width}, canvas.height: ${canv.height}`)
+      const width_scale = canv.width / image.width
+      const height_scale = canv.height / image.height
+      const scale = Math.min(width_scale, height_scale)
+      console.log(`scale: ${scale}`)
+      // ctx?.scale(scale, scale)
       ctx?.drawImage(
         image,
         0,
         0,
         image.width,
         image.height,
-        canv.width / 2 - ((canv.width / image.width) * image.width) / 2,
-        canv.height / 2 - ((canv.width / image.width) * image.height) / 2,
-        canv.width,
-        (canv.width / image.width) * image.height
+        canv.width / 2 - (image.width * scale) / 2,
+        canv.height / 2 - (image.height * scale) / 2,
+        image.width * scale,
+        image.height * scale
       )
     }
 
@@ -78,9 +84,6 @@ export const ImageEditor = () => {
     }
 
     const observer = new ResizeObserver((entries, target) => {
-      // console.log(
-      //   `canvas.width: ${target || canv.width}, canvas.height: ${canvas.current.height || canv.height}`
-      // )
       canv.width = entries[0].borderBoxSize[0].inlineSize
       canv.height = entries[0].borderBoxSize[0].blockSize
       drawImage()
