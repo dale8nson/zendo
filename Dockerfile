@@ -42,4 +42,6 @@ RUN du -h -d 3 /app | sort -hr | head -40
 RUN find /app -type f -size +100M
 RUN du -h -d 2 / | sort -hr | head -40
 
+EXPOSE 8080
+
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
