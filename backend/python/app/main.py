@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routes import upload, metadata, predict, images, image, prompts, caption
+from .routes import upload, metadata, predict, images, image, prompts, caption, score
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import os
@@ -40,6 +40,7 @@ app.include_router(predict.router, prefix="/api")
 app.include_router(images.router, prefix="/api")
 app.include_router(image.router, prefix="/api")
 app.include_router(caption.router, prefix="/api")
+app.include_router(score.router, prefix="/api")
 app.include_router(prompts.router, prefix="/api", tags=["prompts"])
 
 

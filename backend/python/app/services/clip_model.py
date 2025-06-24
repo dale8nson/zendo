@@ -1,13 +1,14 @@
 import torch
 import open_clip
 from open_clip.transform import Compose
-from PIL import Image, ImageFile
+from PIL import Image
 from torchvision import transforms
 import os
 from pathlib import Path
 from typing import cast
 import json
 import numpy as np
+from pydantic import BaseModel, ConfigDict
 
 BATCH_SIZE = 256
 
@@ -32,6 +33,10 @@ preprocess_val = Compose(
         ),
     ]
 )
+
+class ScoreRequest(BaseModel):
+    filename: str
+    caption: str
 
 tokenizer = open_clip.get_tokenizer("ViT-B-32")
 
@@ -111,3 +116,18 @@ async def predict_clip_image(image: Image.Image) -> dict:
     for i in range(5):
         print(f"{text_prompts[top_idxs[i]]}: {top_probs[i].item():.2f}")
     return {"predicted": text_prompts[best_idx], "scores": similarity[0].tolist()[0:4]}
+
+async def score_caption(image: Image.Image, caption: str) -> dict:
+    print("score_caption")
+    tokens = tokenizer([caption])
+    img_tensor = cast(torch.Tensor, preprocess_val(image))
+    img_tensor = img_tensor.unsqueeze(0).to(device)
+
+    with torch.no_grad():
+        caption_features = model.encode_text(tokens)
+        caption_features /= caption_features.norm(dim=-1, keepdim=True)
+        image_features = model.encode_image(img_tensor)
+        image_features /= image_features.norm(dim=-1, keepdim=True)
+        similarity = (100.0 *  image_features @ caption_features.T)
+    print(f"Similarity: {similarity.item():.2f}")
+    return {"score": similarity.item()}

@@ -1,9 +1,15 @@
 'use client'
 
-import { useAppSelector } from '@/lib/hooks'
+import { useAppSelector, useAppDispatch } from '@/lib/hooks'
 import { useEffect, useRef, useState } from 'react'
 import type { MetadataEntry } from './ImageGallery'
-import { useQuery, queryOptions } from '@tanstack/react-query'
+import { useQuery, queryOptions, useQueryClient } from '@tanstack/react-query'
+import { setSelectedImage } from '@/lib/features/image-editor/imageEditorSlice'
+
+interface ScoreRequest {
+  filename: string | undefined
+  caption: string | null
+}
 
 const predict = async (data: MetadataEntry | null) => {
   const response = await fetch('/api/predict', {
@@ -17,8 +23,20 @@ const predict = async (data: MetadataEntry | null) => {
   return await response.json()
 }
 
-const caption = async (data: MetadataEntry | null) => {
+const get_caption = async (data: MetadataEntry) => {
   const response = await fetch('/api/caption', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Access-Control-Allow-Origin': '*',
+    },
+    body: JSON.stringify(data),
+  })
+  return await response.json()
+}
+
+const score = async (data: ScoreRequest | null) => {
+  const response = await fetch('/api/score', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -33,16 +51,56 @@ export const ImageEditor = () => {
   let selectedImage: MetadataEntry | null = useAppSelector((state) => state.imageEditor.image)
   const canvas = useRef<HTMLCanvasElement>(null)
 
+  const dispatch = useAppDispatch()
+  const queryClient = useQueryClient()
+
+  const textRef = useRef(null)
+  const [caption, setCaption] = useState('')
+
   const { data, isLoading } = useQuery(
     queryOptions({
-      queryKey: ['prediction', selectedImage?.id],
-      queryFn: () => caption(selectedImage ? selectedImage : null),
+      queryKey: ['caption', selectedImage?.id],
+      queryFn: async () => await get_caption(selectedImage as MetadataEntry),
+      enabled: !!selectedImage,
     })
   )
+
+  const { data: caption_score, isLoading: captionScoreLoading } = useQuery(
+    queryOptions({
+      queryKey: ['score', selectedImage?.id],
+      queryFn: async () => {
+        console.log(`filename: ${selectedImage?.filename}, caption: ${data.caption}`)
+        return await score({ filename: selectedImage?.filename, caption: data.caption })
+      },
+      enabled: !!data,
+    })
+  )
+
+  const [captionScore, setCaptionScore] = useState(null)
+
+  const bounce = useRef(false)
+
+  const captionChangeHandler = async (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (bounce.current) return
+    bounce.current = true
+    setCaption(e.target.value)
+    const result = await score({
+      filename: selectedImage?.filename,
+      caption: e.target.value,
+    })
+    if (textRef.current) (textRef.current as HTMLTextAreaElement).value = e.target.value
+    setCaptionScore(result.score)
+    setTimeout(() => {
+      bounce.current = false
+    }, 2000)
+  }
 
   useEffect(() => {
     if (!selectedImage || !canvas.current) return
     selectedImage = selectedImage as MetadataEntry
+    queryClient.invalidateQueries({ queryKey: ['caption', selectedImage?.id] })
     const canv = canvas.current as HTMLCanvasElement
     const ctx = canv.getContext('2d')
     const { width, height } = canvas.current.getBoundingClientRect()
@@ -95,9 +153,22 @@ export const ImageEditor = () => {
     }
   }, [selectedImage])
 
-  if (data) {
-    console.log(data)
-  }
+  useEffect(() => {
+    if (data) {
+      setCaption(data.caption)
+    }
+  }, [data])
+
+  useEffect(() => {
+    if (textRef.current) {
+      ;(textRef.current as HTMLTextAreaElement).value = caption
+    }
+  }, [caption])
+
+  useEffect(() => {
+    if (!caption_score) return
+    setCaptionScore(caption_score.score || 0)
+  }, [caption_score])
 
   return (
     <>
@@ -109,8 +180,23 @@ export const ImageEditor = () => {
             </h1>
           </div>
           <canvas ref={canvas} className="top-0 left-0 w-full h-full" />
-          <div className="flex items-center justify-center w-full bg-neutral-900  p-2">
-            <h1 className="text-2xl font-bold text-white">{data ? data.caption : 'Loading...'}</h1>
+          <div className="flex items-start justify-around w-full bg-neutral-900">
+            <textarea
+              ref={textRef}
+              className="text-2xl font-bold text-white w-4/5 h-full m-0 px-2 resize-none border-2 border-solid border-neutral-800"
+              defaultValue={caption}
+              onChange={captionChangeHandler}
+            />
+            <div className="flex items-center justify-center h-full w-1/5 p-2 border-2 border-solid border-neutral-800">
+              <h1 className="text-xl font-bold text-white">
+                Match Score:{' '}
+                {captionScore
+                  ? `${(captionScore as number).toFixed(2)}%`
+                  : captionScoreLoading
+                    ? 'Loading...'
+                    : (0).toFixed(2)}
+              </h1>
+            </div>
           </div>
         </div>
       ) : null}
