@@ -94,7 +94,7 @@ export const ImageEditor = () => {
     setCaptionScore(result.score)
     setTimeout(() => {
       bounce.current = false
-    }, 2000)
+    }, 500)
   }
 
   useEffect(() => {
