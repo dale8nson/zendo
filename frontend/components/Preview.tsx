@@ -9,6 +9,7 @@ const getPreview = async (prompt: string): Promise<string> => {
     headers: {
       'Content-Type': 'application/json',
       Connection: 'keep-alive',
+      'Keep-Alive': 'timeout=600, max=100',
     },
     body: JSON.stringify({ prompt }),
     keepalive: true,
