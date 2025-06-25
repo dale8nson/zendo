@@ -12,6 +12,7 @@ const getPreview = async (prompt: string): Promise<string> => {
     },
     body: JSON.stringify({ prompt }),
     keepalive: true,
+    cache: 'no-cache',
   })
   const data = await response.json()
   return data.image
@@ -62,11 +63,11 @@ export function Preview() {
     const img = new Image(512, 512)
     img.src = `data:image/*;base64,${result}`
     img.onload = () => {
-      drawImage(canv, img, 1024, 1024)
+      drawImage(canv, img, 512, 512)
       const observer = new ResizeObserver((entries, target) => {
         canv.width = entries[0].borderBoxSize[0].inlineSize
         canv.height = entries[0].borderBoxSize[0].blockSize
-        drawImage(canv, img, 1024, 1024)
+        drawImage(canv, img, 512, 512)
       })
       observer.observe(canv)
     }
@@ -80,8 +81,13 @@ export function Preview() {
   })
 
   return (
-    <div className="flex flex-col justify-center items-center w-full h-full">
-      <canvas ref={canvasRef} className="top-0 left-0 w-full h-full border-2 border-dashed" />
+    <div className="flex flex-col justify-center items-center ">
+      <canvas
+        ref={canvasRef}
+        className="top-0 left-0 border-2 border-dashed w-[512px] h-[512px]"
+        width={512}
+        height={512}
+      />
       <button
         className="w-full py-2 px-4 rounded-md text-white bg-gradient-to-br from-gray-800 to-black hover:from-black hover:to-gray-900"
         onClick={generatePreviewButtonHandler}
