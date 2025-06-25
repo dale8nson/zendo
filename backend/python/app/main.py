@@ -1,17 +1,25 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routes import upload, metadata, predict, images, image, prompts, caption, score
+from .routes import upload, metadata, predict, images, image, prompts, caption, score, generate
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import os
 from .services.db import init_db, UPLOADS_DIR
 from contextlib import asynccontextmanager
 from .services.clip_model import init_model
+from .services.SDXL import init_SDXL
+import threading
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_model()
+    # t = threading.Thread(target=init_SDXL)
+    # t.daemon = True
+    # t.start()
+    # t.join()
+    await init_SDXL()
+
     yield
 
 app = FastAPI(lifespan=lifespan)
@@ -41,6 +49,7 @@ app.include_router(images.router, prefix="/api")
 app.include_router(image.router, prefix="/api")
 app.include_router(caption.router, prefix="/api")
 app.include_router(score.router, prefix="/api")
+app.include_router(generate.router, prefix="/api")
 app.include_router(prompts.router, prefix="/api", tags=["prompts"])
 
 

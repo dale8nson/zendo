@@ -12,6 +12,7 @@ backend/python/venv/
 backend/python/app/wheels/
 backend/rust/target/
 backend/python/app/uploads/
+backend/models/
 benchmarks/
 
 # Node & Next.js

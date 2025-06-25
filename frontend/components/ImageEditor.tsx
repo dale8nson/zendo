@@ -4,7 +4,7 @@ import { useAppSelector, useAppDispatch } from '@/lib/hooks'
 import { useEffect, useRef, useState } from 'react'
 import type { MetadataEntry } from './ImageGallery'
 import { useQuery, queryOptions, useQueryClient } from '@tanstack/react-query'
-import { setSelectedImage } from '@/lib/features/image-editor/imageEditorSlice'
+import { setSelectedImage, setCaption } from '@/lib/features/image-editor/imageEditorSlice'
 
 interface ScoreRequest {
   filename: string | undefined
@@ -51,11 +51,12 @@ export const ImageEditor = () => {
   let selectedImage: MetadataEntry | null = useAppSelector((state) => state.imageEditor.image)
   const canvas = useRef<HTMLCanvasElement>(null)
 
+  const caption = useAppSelector((state) => state.imageEditor.caption)
   const dispatch = useAppDispatch()
   const queryClient = useQueryClient()
 
   const textRef = useRef(null)
-  const [caption, setCaption] = useState('')
+  // const [caption, setCaption] = useState('')
 
   const { data, isLoading } = useQuery(
     queryOptions({
@@ -85,7 +86,7 @@ export const ImageEditor = () => {
     e.stopPropagation()
     if (bounce.current) return
     bounce.current = true
-    setCaption(e.target.value)
+    dispatch(setCaption(e.target.value))
     const result = await score({
       filename: selectedImage?.filename,
       caption: e.target.value,
@@ -155,13 +156,13 @@ export const ImageEditor = () => {
 
   useEffect(() => {
     if (data) {
-      setCaption(data.caption)
+      dispatch(setCaption(data.caption))
     }
   }, [data])
 
   useEffect(() => {
     if (textRef.current) {
-      ;(textRef.current as HTMLTextAreaElement).value = caption
+      ;(textRef.current as HTMLTextAreaElement).value = caption || ''
     }
   }, [caption])
 
@@ -184,7 +185,7 @@ export const ImageEditor = () => {
             <textarea
               ref={textRef}
               className="text-2xl font-bold text-white w-4/5 h-full m-0 px-2 resize-none border-2 border-solid border-neutral-800"
-              defaultValue={caption}
+              defaultValue={caption || 'Loading...'}
               onChange={captionChangeHandler}
             />
             <div className="flex items-center justify-center h-full w-1/5 p-2 border-2 border-solid border-neutral-800">

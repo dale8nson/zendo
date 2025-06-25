@@ -1,3 +1,4 @@
+from sympy.core.basic import cacheit
 import torch
 import open_clip
 from open_clip.transform import Compose
@@ -18,8 +19,11 @@ global class_names, text_prompts
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 model, _, _ = open_clip.create_model_and_transforms(
-    model_name="ViT-B-32", pretrained="laion2b_s34b_b79k"
+    model_name="ViT-bigG/14", pretrained="laion2b_s39b_b160k",
+    cache_dir="../models/openclip"
 )
+
+
 
 preprocess_val = Compose(
     [

@@ -7,6 +7,7 @@ import { ImageGallery } from '@/components/ImageGallery'
 import { Logo } from '@/components/Logo'
 import { Ribbon } from '@/components/Ribbon'
 import { ImageEditor } from '@/components/ImageEditor'
+import { Preview } from '@/components/Preview'
 
 export default function HomePage() {
   return (
@@ -25,10 +26,15 @@ export default function HomePage() {
           <ImageGallery />
         </aside>
 
-        {/* Center Panel – Image Editor Placeholder */}
-        <section className="relative flex-1 flex-col items-center justify-center border-r border-neutral-800 bg-fill bg-blend-overlay bg-no-repeat bg-center h-full w-3/5 aspect-square">
-          <Logo />
-          <ImageEditor />
+        {/* Center Panel */}
+        <section className="relative flex items-center border-r border-neutral-800 bg-fill bg-blend-overlay bg-no-repeat bg-center h-full w-3/5 aspect-square">
+          <div className="flex flex-col items-center justify-center relative w-full h-full">
+            <Logo />
+            <ImageEditor />
+          </div>
+          <div className="flex flex-col items-center justify-center w-full h-full">
+            <Preview />
+          </div>
         </section>
 
         {/* Right Panel – Transform / Metadata Placeholder */}

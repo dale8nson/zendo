@@ -8,7 +8,8 @@ router = APIRouter()
 
 @router.post("/score")
 async def score(request: ScoreRequest) -> dict:
-    print(f"Scoring {request.filename} with caption '{request.caption}'")
+    if request.caption == "":
+        return {score: 0}
     image = Image.open(os.path.join(UPLOADS_DIR, request.filename))
     result = await score_caption(image, request.caption)
     return  result
