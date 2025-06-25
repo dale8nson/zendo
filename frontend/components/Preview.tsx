@@ -7,13 +7,11 @@ const getPreview = async (prompt: string): Promise<string> => {
   const response = await fetch('/api/generate', {
     method: 'POST',
     headers: {
+      'Access-Control-Allow-Origin': '*',
       'Content-Type': 'application/json',
-      Connection: 'keep-alive',
-      'Keep-Alive': 'timeout=600, max=100',
     },
     body: JSON.stringify({ prompt }),
     keepalive: true,
-    cache: 'force-cache',
   })
   const data = await response.json()
   return data.image
@@ -60,7 +58,6 @@ export function Preview() {
   const generatePreviewButtonHandler = async () => {
     if (!caption || !canvasRef.current) return
     const canv = canvasRef.current as HTMLCanvasElement
-    const ctx = canv.getContext('2d')
     const result = await getPreview(caption as string)
     const img = new Image(512, 512)
     img.src = `data:image/*;base64,${result}`

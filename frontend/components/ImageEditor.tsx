@@ -29,8 +29,6 @@ const get_caption = async (data: MetadataEntry) => {
     headers: {
       'Content-Type': 'application/json',
       'Access-Control-Allow-Origin': '*',
-      Connection: 'keep-alive',
-      'Keep-Alive': 'timeout=600, max=100',
     },
     body: JSON.stringify(data),
   })
@@ -43,8 +41,6 @@ const score = async (data: ScoreRequest | null) => {
     headers: {
       'Content-Type': 'application/json',
       'Access-Control-Allow-Origin': '*',
-      Connection: 'keep-alive',
-      'Keep-Alive': 'timeout=600, max=100',
     },
     body: JSON.stringify(data),
   })
