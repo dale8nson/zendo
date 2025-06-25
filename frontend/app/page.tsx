@@ -8,8 +8,10 @@ import { Logo } from '@/components/Logo'
 import { Ribbon } from '@/components/Ribbon'
 import { ImageEditor } from '@/components/ImageEditor'
 import { Preview } from '@/components/Preview'
+import { controller } from '@/lib/utils'
 
 export default function HomePage() {
+  controller.abort()
   return (
     <main className="flex flex-col h-screen w-screen bg-gradient-to-br from-black via-zinc-900 to-neutral-800 text-white">
       <header className="h-12 bg-neutral-950  flex items-center text-sm w-full m-0">

@@ -14,4 +14,7 @@ Dockerfile-old
 uploads/
 *.pt
 frontend/app/api/
-backend/models/
+backend/models/openclip/**/*
+backend/models/sdxl-base-1.0/
+!backend/models/openclip/*.{py,json}
+!.gitattributes
