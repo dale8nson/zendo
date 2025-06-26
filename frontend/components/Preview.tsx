@@ -2,16 +2,17 @@
 import { useAppSelector } from '@/lib/hooks'
 import { useQuery } from '@tanstack/react-query'
 import { useEffect, useRef } from 'react'
+import { controller } from '@/lib/utils'
 
 const getPreview = async (prompt: string): Promise<string> => {
-  const response = await fetch('/api/generate', {
+  console.log('getPreview called with prompt:', prompt)
+  const response = await fetch('http://localhost:8000/api/generate', {
     method: 'POST',
     headers: {
-      'Access-Control-Allow-Origin': '*',
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ prompt }),
-    keepalive: true,
+    // keepalive: true,
     cache: 'no-cache',
   })
   const data = await response.json()
@@ -57,11 +58,12 @@ export function Preview() {
   }
 
   const generatePreviewButtonHandler = async () => {
+    console.log('Button clicked')
     if (!caption || !canvasRef.current) return
     const canv = canvasRef.current as HTMLCanvasElement
     const result = await getPreview(caption as string)
     const img = new Image(512, 512)
-    img.src = `data:image/*;base64,${result}`
+    img.src = `data:image/png;base64,${result}`
     img.onload = () => {
       drawImage(canv, img, 512, 512)
       const observer = new ResizeObserver((entries, target) => {

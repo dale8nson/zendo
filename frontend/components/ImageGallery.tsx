@@ -41,7 +41,7 @@ export const ImageGallery = () => {
       queryKey: ['images'],
       queryFn: fetchImages,
       staleTime: 1000 * 60,
-      refetchOnWindowFocus: true,
+      refetchOnWindowFocus: false,
     })
   )
 

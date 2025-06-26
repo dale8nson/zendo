@@ -42,3 +42,4 @@ yarn-error.log*
 next-env.d.ts
 
 .github/
+sdxl-base-1.0-auto/

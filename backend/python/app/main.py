@@ -6,14 +6,14 @@ from fastapi.responses import FileResponse
 import os
 from .services.db import init_db, UPLOADS_DIR
 from contextlib import asynccontextmanager
-from .services.clip_model import init_model
+from .services.clip_model import init_clip
 from .services.SDXL import init_SDXL
 import threading
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await init_model()
+    await init_clip()
     # t = threading.Thread(target=init_SDXL)
     # t.daemon = True
     # t.start()
@@ -27,7 +27,7 @@ app = FastAPI(lifespan=lifespan)
 init_db()
 
 app.add_middleware(
-    CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
+    CORSMiddleware, allow_origins=["http://localhost:3000"], allow_methods=["*"], allow_headers=["*"], allow_credentials=True
 )
 
 cwd = os.getcwd()

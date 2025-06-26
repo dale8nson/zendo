@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { MetadataEntry } from './ImageGallery'
 import { useQuery, queryOptions, useQueryClient } from '@tanstack/react-query'
 import { setSelectedImage, setCaption } from '@/lib/features/image-editor/imageEditorSlice'
+import { controller } from '@/lib/utils'
 
 interface ScoreRequest {
   filename: string | undefined
@@ -16,7 +17,6 @@ const predict = async (data: MetadataEntry | null) => {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
     },
     body: JSON.stringify(data),
   })
@@ -28,9 +28,9 @@ const get_caption = async (data: MetadataEntry) => {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
     },
     body: JSON.stringify(data),
+    signal: controller.signal,
   })
   return await response.json()
 }
@@ -40,9 +40,9 @@ const score = async (data: ScoreRequest | null) => {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
     },
     body: JSON.stringify(data),
+    signal: controller.signal,
   })
   return await response.json()
 }
@@ -63,6 +63,7 @@ export const ImageEditor = () => {
       queryKey: ['caption', selectedImage?.id],
       queryFn: async () => await get_caption(selectedImage as MetadataEntry),
       enabled: !!selectedImage,
+      refetchOnWindowFocus: false,
     })
   )
 
@@ -74,6 +75,7 @@ export const ImageEditor = () => {
         return await score({ filename: selectedImage?.filename, caption: data.caption })
       },
       enabled: !!data,
+      refetchOnWindowFocus: false,
     })
   )
 

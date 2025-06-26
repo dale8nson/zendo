@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional, Literal
 import os
-from app.services.clip_model import predict_clip_image
+# from app.services.clip_model import predict_clip_image
 from app.services.metadata_handler import log_prediction_to_db
 from PIL import Image
 
@@ -55,17 +55,17 @@ class PredictRequest(BaseModel):
     height: int
     transform: Optional[TransformParams] = None
 
-@router.post("/predict")
-async def predict_image(data: PredictRequest):
-    image_path = os.path.join(UPLOAD_DIR, data.filename)
+# @router.post("/predict")
+# async def predict_image(data: PredictRequest):
+#     image_path = os.path.join(UPLOAD_DIR, data.filename)
 
-    if not os.path.exists(image_path):
-        raise HTTPException(status_code=404, detail="Image not found.")
+#     if not os.path.exists(image_path):
+#         raise HTTPException(status_code=404, detail="Image not found.")
 
-    image = Image.open(image_path)
+#     image = Image.open(image_path)
 
-    print("Transform provided:", data.transform)
-    print("Fallback width:", data.width, "height:", data.height)
+#     print("Transform provided:", data.transform)
+#     print("Fallback width:", data.width, "height:", data.height)
 
     # if data.transform:
     #     image = crop_and_resize(
@@ -78,14 +78,14 @@ async def predict_image(data: PredictRequest):
     # else:
     #     image = crop_and_resize(image,x=224 / 2 - data.width / 2, y=224 / 2 - data.height / 2, scale=1, fit="contain")
 
-    result = await predict_clip_image(image)
+    # result = await predict_clip_image(image)
 
-    print(f"result: {result}")
+    # print(f"result: {result}")
 
-    print(f"Prediction result: {result['predicted']}")
+    # print(f"Prediction result: {result['predicted']}")
 
-    log_prediction_to_db(
-        data.filename, data.original_filename, result.get("predicted", ""), result.get("scores", []), data.width, data.height
-    )
+    # log_prediction_to_db(
+    #     data.filename, data.original_filename, result.get("predicted", ""), result.get("scores", []), data.width, data.height
+    # )
 
-    return result
+    # return result
