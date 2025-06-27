@@ -127,11 +127,12 @@ async def init_clip():
         model_name="ViT-bigG/14", pretrained="laion2b_s39b_b160k",
         cache_dir="../models/openclip"
     )
+    model = model.to(device)
+    model.eval()
 
 async def score_caption(image: Image.Image, caption: str) -> dict:
     global model, tokenizer
-    model = model.to(device)
-    model.eval()
+
     print(f"score_caption \"{caption}\" on device {device}")
     tokens = tokenizer([caption]).to(device)
     img_tensor = cast(torch.Tensor, preprocess_val(image))
@@ -144,5 +145,5 @@ async def score_caption(image: Image.Image, caption: str) -> dict:
         image_features /= image_features.norm(dim=-1, keepdim=True)
         similarity = (100.0 *  image_features @ caption_features.T)
     print(f"Similarity: {similarity.item():.2f}")
-    model = model.to("cpu")
+
     return {"score": similarity.item()}
