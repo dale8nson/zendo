@@ -27,8 +27,6 @@ def get_images():
 
     results: List[Dict[str, Any]] = []
 
-    print(f"Fetched {len(metadata)} rows from DB", flush=True)
-
     for datum in metadata:
         id_, filename, original_filename, label, prediction, timestamp, width, height = datum
         filename = Path(str(filename))

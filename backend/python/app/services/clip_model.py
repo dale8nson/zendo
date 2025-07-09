@@ -19,10 +19,6 @@ global class_names, text_prompts
 
 device = torch.device("mps" if torch.backends.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu")
 
-
-
-
-
 preprocess_val = Compose(
     [
         # transforms.PILToTensor(),

@@ -2,13 +2,17 @@ import { createSlice } from '@reduxjs/toolkit'
 import { MetadataEntry } from '@/components/ImageGallery'
 
 interface ImageEditorState {
-  image: MetadataEntry | null
+  selectedImage: MetadataEntry | null
   caption: string | null
+  editorCanvasData: string | null
+  previewCanvasData: string | null
 }
 
 const initialState: ImageEditorState = {
-  image: null,
+  selectedImage: null,
   caption: null,
+  editorCanvasData: null,
+  previewCanvasData: null,
 }
 
 const imageEditorSlice = createSlice({
@@ -16,20 +20,21 @@ const imageEditorSlice = createSlice({
   initialState,
   reducers: {
     setSelectedImage(state, action) {
-      state.image = action.payload
-    },
-    selectedImage(state, action) {
-      return { ...state, image: state.image }
+      state.selectedImage = action.payload
     },
     setCaption(state, action) {
       state.caption = action.payload
     },
-    caption(state) {
-      return { ...state, caption: state.caption }
+    setEditorCanvasData(state, action) {
+      state.editorCanvasData = action.payload
+    },
+    setPreviewCanvasData(state, action) {
+      state.previewCanvasData = action.payload
     },
   },
 })
 
-export const { setSelectedImage, selectedImage, setCaption, caption } = imageEditorSlice.actions
+export const { setSelectedImage, setCaption, setEditorCanvasData, setPreviewCanvasData } =
+  imageEditorSlice.actions
 
 export default imageEditorSlice.reducer

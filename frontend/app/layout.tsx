@@ -21,7 +21,7 @@ export default function RootLayout({
       <body className={'w-screen h-screen md:w-screen md:h-screen antialiased'}>
         <Providers>
           {children}
-          <Toaster position="top-right" />
+          <Toaster position="top-center" />
         </Providers>
       </body>
     </html>

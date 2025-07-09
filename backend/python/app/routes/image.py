@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 import os
-from app.services.db import UPLOADS_DIR
+from app.services.db import UPLOADS_DIR, get_connection
 
 router = APIRouter()
 
@@ -14,3 +14,18 @@ async def get_uploaded_image(filename: str):
         raise HTTPException(status_code=404, detail="Image not found")
     else:
         return FileResponse(image_path, media_type="image/jpeg")
+
+@router.delete("/image/{filename}")
+async def delete_uploaded_image(filename: str):
+    image_path = os.path.join(UPLOADS_DIR, filename)
+    if not os.path.exists(image_path):
+        raise HTTPException(status_code=404, detail="Image not found")
+    else:
+        os.remove(image_path)
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM metadata WHERE filename = ?", (filename,))
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return {"message": "Image deleted successfully"}

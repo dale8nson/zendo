@@ -1,0 +1,186 @@
+./diffusers
+├── _typos.toml
+├── benchmarks
+│   ├── __init__.py
+│   ├── benchmarking_flux.py
+│   ├── benchmarking_ltx.py
+│   ├── benchmarking_sdxl.py
+│   ├── benchmarking_utils.py
+│   ├── benchmarking_wan.py
+│   ├── populate_into_db.py
+│   ├── push_results.py
+│   ├── README.md
+│   ├── requirements.txt
+│   └── run_all.py
+├── CITATION.cff
+├── CODE_OF_CONDUCT.md
+├── CONTRIBUTING.md
+├── docker
+│   ├── diffusers-doc-builder
+│   ├── diffusers-flax-cpu
+│   ├── diffusers-flax-tpu
+│   ├── diffusers-onnxruntime-cpu
+│   ├── diffusers-onnxruntime-cuda
+│   ├── diffusers-pytorch-cpu
+│   ├── diffusers-pytorch-cuda
+│   ├── diffusers-pytorch-minimum-cuda
+│   └── diffusers-pytorch-xformers-cuda
+├── docs
+│   ├── README.md
+│   ├── source
+│   └── TRANSLATING.md
+├── examples
+│   ├── advanced_diffusion_training
+│   ├── amused
+│   ├── cogvideo
+│   ├── cogview4-control
+│   ├── community
+│   ├── conftest.py
+│   ├── consistency_distillation
+│   ├── controlnet
+│   ├── custom_diffusion
+│   ├── dreambooth
+│   ├── flux-control
+│   ├── inference
+│   ├── instruct_pix2pix
+│   ├── kandinsky2_2
+│   ├── model_search
+│   ├── README.md
+│   ├── reinforcement_learning
+│   ├── research_projects
+│   ├── server
+│   ├── t2i_adapter
+│   ├── test_examples_utils.py
+│   ├── text_to_image
+│   ├── textual_inversion
+│   ├── unconditional_image_generation
+│   └── vqgan
+├── LICENSE
+├── Makefile
+├── MANIFEST.in
+├── PHILOSOPHY.md
+├── pyproject.toml
+├── README.md
+├── scripts
+│   ├── __init__.py
+│   ├── change_naming_configs_and_checkpoints.py
+│   ├── conversion_ldm_uncond.py
+│   ├── convert_amused.py
+│   ├── convert_animatediff_motion_lora_to_diffusers.py
+│   ├── convert_animatediff_motion_module_to_diffusers.py
+│   ├── convert_animatediff_sparsectrl_to_diffusers.py
+│   ├── convert_asymmetric_vqgan_to_diffusers.py
+│   ├── convert_aura_flow_to_diffusers.py
+│   ├── convert_blipdiffusion_to_diffusers.py
+│   ├── convert_cogvideox_to_diffusers.py
+│   ├── convert_cogview3_to_diffusers.py
+│   ├── convert_cogview4_to_diffusers_megatron.py
+│   ├── convert_cogview4_to_diffusers.py
+│   ├── convert_consistency_decoder.py
+│   ├── convert_consistency_to_diffusers.py
+│   ├── convert_cosmos_to_diffusers.py
+│   ├── convert_dance_diffusion_to_diffusers.py
+│   ├── convert_dcae_to_diffusers.py
+│   ├── convert_ddpm_original_checkpoint_to_diffusers.py
+│   ├── convert_diffusers_sdxl_lora_to_webui.py
+│   ├── convert_diffusers_to_original_sdxl.py
+│   ├── convert_diffusers_to_original_stable_diffusion.py
+│   ├── convert_dit_to_diffusers.py
+│   ├── convert_flux_to_diffusers.py
+│   ├── convert_flux_xlabs_ipadapter_to_diffusers.py
+│   ├── convert_gligen_to_diffusers.py
+│   ├── convert_hunyuan_video_to_diffusers.py
+│   ├── convert_hunyuandit_controlnet_to_diffusers.py
+│   ├── convert_hunyuandit_to_diffusers.py
+│   ├── convert_i2vgen_to_diffusers.py
+│   ├── convert_if.py
+│   ├── convert_k_upscaler_to_diffusers.py
+│   ├── convert_kakao_brain_unclip_to_diffusers.py
+│   ├── convert_kandinsky_to_diffusers.py
+│   ├── convert_kandinsky3_unet.py
+│   ├── convert_ldm_original_checkpoint_to_diffusers.py
+│   ├── convert_lora_safetensor_to_diffusers.py
+│   ├── convert_ltx_to_diffusers.py
+│   ├── convert_lumina_to_diffusers.py
+│   ├── convert_mochi_to_diffusers.py
+│   ├── convert_models_diffuser_to_diffusers.py
+│   ├── convert_ms_text_to_video_to_diffusers.py
+│   ├── convert_music_spectrogram_to_diffusers.py
+│   ├── convert_ncsnpp_original_checkpoint_to_diffusers.py
+│   ├── convert_omnigen_to_diffusers.py
+│   ├── convert_original_audioldm_to_diffusers.py
+│   ├── convert_original_audioldm2_to_diffusers.py
+│   ├── convert_original_controlnet_to_diffusers.py
+│   ├── convert_original_musicldm_to_diffusers.py
+│   ├── convert_original_stable_diffusion_to_diffusers.py
+│   ├── convert_original_t2i_adapter.py
+│   ├── convert_pixart_alpha_to_diffusers.py
+│   ├── convert_pixart_sigma_to_diffusers.py
+│   ├── convert_sana_controlnet_to_diffusers.py
+│   ├── convert_sana_to_diffusers.py
+│   ├── convert_sd3_controlnet_to_diffusers.py
+│   ├── convert_sd3_to_diffusers.py
+│   ├── convert_shap_e_to_diffusers.py
+│   ├── convert_stable_audio.py
+│   ├── convert_stable_cascade_lite.py
+│   ├── convert_stable_cascade.py
+│   ├── convert_stable_diffusion_checkpoint_to_onnx.py
+│   ├── convert_stable_diffusion_controlnet_to_onnx.py
+│   ├── convert_stable_diffusion_controlnet_to_tensorrt.py
+│   ├── convert_svd_to_diffusers.py
+│   ├── convert_tiny_autoencoder_to_diffusers.py
+│   ├── convert_unclip_txt2img_to_image_variation.py
+│   ├── convert_unidiffuser_to_diffusers.py
+│   ├── convert_vae_diff_to_onnx.py
+│   ├── convert_vae_pt_to_diffusers.py
+│   ├── convert_versatile_diffusion_to_diffusers.py
+│   ├── convert_vq_diffusion_to_diffusers.py
+│   ├── convert_wan_to_diffusers.py
+│   ├── convert_wuerstchen.py
+│   ├── convert_zero123_to_diffusers.py
+│   ├── extract_lora_from_model.py
+│   └── generate_logits.py
+├── setup.py
+├── src
+│   ├── diffusers
+│   └── diffusers.egg-info
+├── tests
+│   ├── __init__.py
+│   ├── conftest.py
+│   ├── fixtures
+│   ├── hooks
+│   ├── lora
+│   ├── models
+│   ├── others
+│   ├── pipelines
+│   ├── quantization
+│   ├── remote
+│   ├── schedulers
+│   └── single_file
+└── utils
+    ├── check_config_docstrings.py
+    ├── check_copies.py
+    ├── check_doc_toc.py
+    ├── check_dummies.py
+    ├── check_inits.py
+    ├── check_repo.py
+    ├── check_support_list.py
+    ├── check_table.py
+    ├── consolidated_test_report.py
+    ├── custom_init_isort.py
+    ├── extract_tests_from_mixin.py
+    ├── fetch_latest_release_branch.py
+    ├── fetch_torch_cuda_pipeline_test_matrix.py
+    ├── get_modified_files.py
+    ├── log_reports.py
+    ├── notify_benchmarking_status.py
+    ├── notify_community_pipelines_mirror.py
+    ├── notify_slack_about_release.py
+    ├── overwrite_expected_slice.py
+    ├── print_env.py
+    ├── release.py
+    ├── stale.py
+    ├── tests_fetcher.py
+    └── update_metadata.py
+
+53 directories, 131 files

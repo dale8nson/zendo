@@ -18,3 +18,11 @@ backend/models/openclip/**/*
 backend/models/sdxl-base-1.0*/
 !backend/models/openclip/*.{py,json}
 !.gitattributes
+*.safetensors
+sdxl-refiner-1.0/
+sdxl-base-1.0/
+SAM/
+test_images/
+test_masks/
+files.rtf
+backend/diffusers/

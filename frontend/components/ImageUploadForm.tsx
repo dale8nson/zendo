@@ -33,7 +33,9 @@ export const ImageUploadForm = ({ onUpload }: { onUpload?: () => void }) => {
     const file = event.dataTransfer.files[0]
     if (file && file.type.startsWith('image/')) {
       setImage(file)
-      setPreviewUrl(URL.createObjectURL(file))
+      const url = URL.createObjectURL(file)
+      console.log(`url:${url.slice(0, 29)}...`)
+      setPreviewUrl(url)
     }
   }
 
@@ -41,7 +43,9 @@ export const ImageUploadForm = ({ onUpload }: { onUpload?: () => void }) => {
     const file = event.target.files?.[0]
     if (file && file.type.startsWith('image/')) {
       setImage(file)
-      setPreviewUrl(URL.createObjectURL(file))
+      const url = URL.createObjectURL(file)
+      console.log(`url:${url.slice(0, 29)}...`)
+      setPreviewUrl(url)
     }
   }
 
@@ -58,7 +62,6 @@ export const ImageUploadForm = ({ onUpload }: { onUpload?: () => void }) => {
         if (typeof onUpload === 'function') {
           onUpload()
         }
-        // alert('Upload successful!')
         toast.success('Upload successful!')
         setImage(null)
         setPreviewUrl(null)
@@ -82,7 +85,7 @@ export const ImageUploadForm = ({ onUpload }: { onUpload?: () => void }) => {
         e.preventDefault()
         handleUpload()
       }}
-      className="space-y-4"
+      className="space-y-4 sticky top-0 z-50 bg-neutral-900"
     >
       <label
         htmlFor="file"

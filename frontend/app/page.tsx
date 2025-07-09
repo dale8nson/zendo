@@ -8,45 +8,45 @@ import { Logo } from '@/components/Logo'
 import { Ribbon } from '@/components/Ribbon'
 import { ImageEditor } from '@/components/ImageEditor'
 import { Preview } from '@/components/Preview'
-import { controller } from '@/lib/utils'
+import { RightSideBar } from '@/components/RightSideBar'
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
+import { ImageControlPanel } from '@/components/ImageControlPanel'
 
 export default function HomePage() {
-  controller.abort()
   return (
     <main className="flex flex-col h-screen w-screen bg-gradient-to-br from-black via-zinc-900 to-neutral-800 text-white">
       <header className="h-12 bg-neutral-950  flex items-center text-sm w-full m-0">
         <Ribbon />
       </header>
-
-      {/* 3-Panel Layout */}
-      <div className="flex flex-1 overflow-hidden w-full">
-        {/* Left Panel – Gallery */}
-        <aside className="w-1/5 min-w-[200px] bg-neutral-900 border-r border-neutral-800 p-2 overflow-y-auto">
+      <ResizablePanelGroup direction="horizontal" className="flex overflow-hidden w-full h-full">
+        <ResizablePanel defaultSize={15}>
+          {/* <aside className="w-full bg-neutral-900 border-r border-neutral-800 p-2"> */}
           <h2 className="text-xs font-semibold text-neutral-400 mb-2">Upload Image</h2>
           <ImageUploadForm />
           <h2 className="text-xs font-semibold text-neutral-400 mt-6 mb-2">Gallery</h2>
           <ImageGallery />
-        </aside>
-
-        {/* Center Panel */}
-        <section className="relative flex items-center border-r border-neutral-800 bg-fill bg-blend-overlay bg-no-repeat bg-center h-full w-3/5 aspect-square">
-          <div className="flex flex-col items-center justify-center relative w-full h-full">
-            <Logo />
-            <ImageEditor />
-          </div>
-          <div className="flex flex-col items-center justify-center w-full h-full">
-            <Preview />
-          </div>
-        </section>
-
-        {/* Right Panel – Transform / Metadata Placeholder */}
-        <aside className="w-1/5 min-w-[220px] max-w-xs bg-neutral-900 p-3">
-          <h2 className="text-xs font-semibold text-neutral-400 mb-2">Transform Controls</h2>
-          <div className="text-neutral-500 text-sm italic">TODO: Scale / Translate sliders</div>
-          <h2 className="text-xs font-semibold text-neutral-400 mt-6 mb-2">Metadata</h2>
-          <div className="text-neutral-500 text-sm italic">TODO: Label / Prediction editor</div>
-        </aside>
-      </div>
+          {/* </aside> */}
+        </ResizablePanel>
+        <ResizableHandle />
+        <ResizablePanel
+          defaultSize={35}
+          className="relative flex items-center border-r border-neutral-800 h-full w-full"
+        >
+          <ImageEditor />
+          <ImageControlPanel />
+        </ResizablePanel>
+        <ResizableHandle />
+        <ResizablePanel
+          defaultSize={35}
+          className="relative flex items-center border-r border-neutral-800  bg-no-repeat bg-center h-full w-full"
+        >
+          <Preview />
+        </ResizablePanel>
+        <ResizableHandle />
+        <ResizablePanel defaultSize={15}>
+          <RightSideBar />
+        </ResizablePanel>
+      </ResizablePanelGroup>
     </main>
   )
 }

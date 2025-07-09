@@ -1,0 +1,6 @@
+#!zsh
+
+source .venv/bin/activate
+export PYTORCH_MPS_HIGH_WATERMARK_RATIO=0.0
+uvicorn --port 8000 --timeout-keep-alive 1800 app.main:app --reload
+# gunicorn -k uvicorn.workers.UvicornWorker -w 2 app.main:app
