@@ -1,6 +1,6 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from .routes import upload, metadata, predict caption, score, masks, ws
+from .routes import upload, metadata, predict, caption, score, masks, ws
 from fastapi.responses import FileResponse
 import os
 from contextlib import asynccontextmanager
