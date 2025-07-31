@@ -18,16 +18,13 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
-    CORSMiddleware, allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"], allow_methods=["*"], allow_headers=["*"], allow_credentials=True
+    CORSMiddleware, allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "*"], allow_methods=["*"], allow_headers=["*"], allow_credentials=True
 )
 
 cwd = os.getcwd()
 
 app.include_router(predict.router, prefix="/api")
 app.include_router(score.router, prefix="/api")
-app.include_router(generate.router, prefix="/api")
-app.include_router(refine.router, prefix="/api")
 app.include_router(masks.router, prefix="/api")
-app.include_router(inpaint.router, prefix="/api")
 # app.include_router(prompts.router, prefix="/api", tags=["prompts"])
 app.include_router(ws.router, prefix="/ws")
