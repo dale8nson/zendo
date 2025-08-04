@@ -7,7 +7,11 @@ from fastapi import WebSocketDisconnect
 from typing import Dict, Any
 import websockets
 import asyncio
+from websockets.asyncio.client import connect
+
 import os
+import json
+import re
 
 
 manager = ConnectionManager()
@@ -171,6 +175,8 @@ async def train_ws(ws: WebSocket):
         async for message in ws.iter_json():
             await ws.send_json({"status": "started"})
             response = await train(message["collection"], message["token"])
+            await load_inversion(message["collection"], message["token"])
+
             await ws.send_json(response)
 
     except WebSocketDisconnect:
@@ -181,32 +187,39 @@ async def train_ws(ws: WebSocket):
 
 
 async def websocket_send(uri: str, message: str):
-    async with websockets.connect(uri) as websocket:
-        await websocket.send(message)
+    async with connect(uri) as websocket:
+        await websocket(message)
         response = await websocket.recv()
         return response
 
-# @router.websocket("/load_inversion")
-# async def load_inversion(ws: WebSocket):
-#     global manager
 
-#     await manager.connect(ws)
+async def load_inversion(collection, token):
 
-#     try:
-#         async for message in ws.iter_json():
-#             collection = message["collection"]
-#             token = message["token"]
+    uri="ws://10.0.0.22:8002/ws/inversion"
 
-#             # websocket_send(uri="ws:")
+    message=json.dumps({"collection": collection, "token": token })
 
-#             with open(path, "rb") as f:
-#                 await ws.send_bytes(f.read())
+    conn = await connect(uri)
+    await conn.send_json(message)
 
-#     except WebSocketDisconnect:
-#         manager.disconnect(ws)
-#     except Exception as e:
-#         await ws.send_json({"error": str(e)})
-#         raise e
+    i = 1
+    while True:
+        try:
+            message = await conn.recv()
+            path = os.path.join(os.getcwd(), f"../models/user/{collection}/{token}{f"_{i}" if i > 1 else ""}.safetensors")
+
+            with open(path, "w") as f:
+                f.write(message)
+
+            pipe.load_textual_inversion(path)
+            refiner.load_textual_inversion(path)
+            inpainter.load_textual_inversion(path)
+
+            i += 1
+
+        except websockets.ConnectionClosed:
+            break
+
 
 
 @router.websocket("/inversion")
