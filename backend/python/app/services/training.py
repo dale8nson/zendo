@@ -616,6 +616,11 @@ async def train(
     if inpainter is not None:
         inpainter.to(torch.device("cpu"))
 
+    if torch.backends.mps.is_available():
+        torch.mps.empty_cache()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
     model_path = os.path.join(os.getcwd(), "../models/sdxl-base-1.0")
     output_dir = os.path.join(os.getcwd(), f"../models/user/{collection}")
 
