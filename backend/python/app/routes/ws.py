@@ -175,7 +175,6 @@ async def train_ws(ws: WebSocket):
         async for message in ws.iter_json():
             await ws.send_json({"status": "started"})
             response = await train(message["collection"], message["token"])
-            await load_inversion(message["collection"], message["token"])
 
             await ws.send_json(response)
 
@@ -193,6 +192,7 @@ async def websocket_send(uri: str, message: str):
         return response
 
 
+@router.websocket("/load_inversion")
 async def load_inversion(collection, token):
 
     uri="ws://10.0.0.22:8002/ws/inversion"
@@ -217,11 +217,13 @@ async def load_inversion(collection, token):
 
             i += 1
 
-        except websockets.ConnectionClosedError (e):
-            print(f"{e}")
+        except websockets.ConnectionClosedError as e:
+            print(f"{str(e)}")
 
         except websockets.ConnectionClosed:
             break
+
+    return {"status": "OK"}
 
 
 
