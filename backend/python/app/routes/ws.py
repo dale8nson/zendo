@@ -217,6 +217,9 @@ async def load_inversion(collection, token):
 
             i += 1
 
+        except websockets.ConnectionClosedError (e):
+            print(f"{e}")
+
         except websockets.ConnectionClosed:
             break
 
