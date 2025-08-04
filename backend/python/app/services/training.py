@@ -84,63 +84,56 @@ def resize_image(image, size=1024):
 
     return image
 
-def generate_images(image, bg, bbox, mask=None, size=1024):
+def generate_images(image, bg, bbox, mask, size=1024):
     global step
-    scale_x = size / image.width
-    scale_y = size / image.height
-    scale = min(scale_x, scale_y)
-    image = image.resize((math.floor(image.width * scale), math.floor(image.height * scale)))
+    size = 1024
 
-    scaled_bbox = ([n * scale for n in bbox])
-
-    print(f"scaled_bbox: {scaled_bbox}")
-
-    scale_x = size / bg.width
-    scale_y = size / bg.height
-    scale = min(scale_x, scale_y)
-    bg = bg.resize((math.floor(bg.width * scale), math.floor(bg.height * scale)))
-    full_mask = Image.new("L", (size, size), color=0)
-    # bbox = tuple([n for (x, y) in (bbox[0:2], bbox[2:4]) for n in (
-    #     math.floor((full_mask.width / 2 - image.width / 2) + (x * scale)),
-    #     math.floor((full_mask.height / 2 - image.height / 2) + (y * scale))
-    # )])
-    positioned = bg.copy()
-
-    cropped_mask = None
-    x = math.floor(size / 2 - image.width / 2)
-    y = math.floor(size / 2 - image.height / 2)
-    center_bbox = (x, y, x + image.width, y + image.height)
-
-    if mask is not None:
-        scale_x = size / mask.width
-        scale_y = size / mask.height
-        scale = min(scale_x, scale_y)
-        mask = mask.resize((math.floor(mask.width * scale), math.floor(mask.height * scale)))
-        mask.save(os.path.join(os.getcwd(), f"app/test_images/mask-{step}.png"))
-        step += 1
-
-        full_mask.paste(mask, box=center_bbox)
-        cropped_mask = mask.crop(scaled_bbox)
-        cropped_mask.save(os.path.join(os.getcwd(), f"app/test_images/cropped-mask-{step}.png"))
+    image.save(os.path.join(os.getcwd(), "app/test_images/dataset-image-original.png"))
+    mask.save(os.path.join(os.getcwd(), "app/test_images/dataset-mask-original.png"))
+    bg.save(os.path.join(os.getcwd(), "app/test_images/dataset-bg-original.png"))
 
 
     print(f"image: {image}")
-    print(f"bbox: {center_bbox}")
-    print(f"full_mask: {full_mask}")
-    positioned.paste(image, box=center_bbox, mask=mask)
+    print(f"bg: {bg}")
+    print(f"bbox: {bbox}")
+    print(f"mask: {mask}")
 
-    positioned.save(os.path.join(os.getcwd(), f"app/test_images/positioned-{step}.png"))
+    # scale_x = size / bg.width
+    # scale_y = size / bg.height
+    # scale = min(scale_x, scale_y)
+    # bg = bg.resize((math.floor(bg.width * scale), math.floor(bg.height * scale)))
+    full_mask = Image.new("L", (1024, 1024), color=0)
+
+    positioned = bg.copy()
+    cropped_mask = mask.crop(bbox)
+    cropped_mask.save(os.path.join(os.getcwd(), f"app/test_images/dataset-cropped-mask-{step}.png"))
+
+
+    x = math.floor(size / 2 - cropped_mask.width / 2)
+    y = math.floor(size / 2 - cropped_mask.height / 2)
+    center_bbox = (x, y, x + cropped_mask.width, y + cropped_mask.height)
+    print(f"image: {image}")
+    print(f"center_bbox: {center_bbox}")
+    print(f"mask: {mask}")
+    print(f"full_mask: {full_mask}")
+
+    cropped_image = image.crop(bbox)
+    cropped_image.save(os.path.join(os.getcwd(), "app/test_images/dataset-cropped-image.png"))
+
+    print(f"cropped_image: {cropped_image}")
+    print(f"cropped_mask: {cropped_mask}")
+    positioned.paste(cropped_image, box=bbox, mask=cropped_mask)
+
+    positioned.save(os.path.join(os.getcwd(), "app/test_images/dataset-positioned.png"))
     step += 1
 
     centered = bg.copy()
-    cropped_image = image.crop([float(n) for n in scaled_bbox])
-    cropped_image.save(os.path.join(os.getcwd(), f"app/test_images/cropped-{step}.png"))
 
-    x1, y1 = math.floor(centered.width / 2 - cropped_image.width / 2), math.floor(centered.height / 2 - cropped_image.height / 2)
+    x1, y1 = int(centered.width / 2 - cropped_image.width / 2), int(centered.height / 2 - cropped_image.height / 2)
     x2, y2 = x1 + cropped_image.width, y1 + cropped_image.height
 
-    centered.paste(cropped_image, box=(x1, y1), mask=cropped_mask)
-    centered.save(os.path.join(os.getcwd(), f"app/test_images/centered-{step}.png"))
+    centered.paste(cropped_image, box=center_bbox, mask=cropped_mask)
+    centered.save(os.path.join(os.getcwd(), "app/test_images/dataset-centered-image.png"))
     step += 1
 
     return positioned, centered
@@ -173,55 +166,103 @@ async def create_set(image_data: str, masks: List[MaskData], collection: str, to
     bytes = base64.b64decode(image_data)
     image = Image.open(BytesIO(bytes)).convert("RGBA")
     print(f"image size: {image.size}")
-    image.save(os.path.join(os.getcwd(), f"app/test_images/original-{step}.png"))
+    image.save(os.path.join(os.getcwd(), f"app/test_images/original-undedited-image.png"))
 
     composite_mask = Image.new(mode="L", size=image.size, color=0)
     composite_bbox: Tuple[int, int, int, int] = (image.width, image.height, 0, 0)
 
+    masks = sorted(masks, key=lambda x: x["area"], reverse=True)
+
     for data in masks:
-       b64 = extract_base64_data(data["mask"])
-       bytes = base64.b64decode(b64)
-       mask = Image.open(BytesIO(bytes)).convert("RGBA")
+
+       mask = data["mask"] if data["include"] == True else data["inverted_mask"] if data["exclude"] == True else None
+
+       if mask is None:
+           continue
+
+       b64 = extract_base64_data(mask)
+       image_bytes = base64.b64decode(b64)
+
+       mask = Image.open(BytesIO(image_bytes)).convert("RGBA")
        print(f"mask size: {mask.size}")
        mask.save(os.path.join(os.getcwd(), f"app/test_images/mask-data-mask-{step}.png"))
        step += 1
-       alpha = mask.getchannel("A")
+
+       alpha_channel = mask.getchannel("A").convert("L")
        mask = mask.convert("L")
-       mask.putdata([ 0 if n == 0 else 255 for n in np.asarray(alpha).flatten()])
 
-       mask.save(os.path.join(os.getcwd(), f"app/test_images/mask-data-mask-L-{step}.png"))
-       # alpha = Image.new(mode="L", size=mask.size, color=255)
-       # mask.putalpha(alpha)
-       # mask = mask.convert("L")
-       print(f"data[\"bbox\"]: {data["bbox"]}")
+       binary_mask = alpha_channel.point(lambda p: 255 if p > 0 else 0).convert("L")
 
-       positioned = Image.new("L", size = image.size, color=0)
-       positioned.paste(mask, box=data["bbox"])
-       positioned.save(os.path.join(os.getcwd(), f"app/test_images/dataset_positioned_mask_{step}.png"))
+       inverted_binary = ImageOps.invert(binary_mask)
 
-       bx1, by1, bx2, by2 = bbox
-       dx1, dy1, dx2, dy2 = data["bbox"]
-       cx1, cy1, cx2, cy2 = composite_bbox
+       composite_mask.paste(binary_mask if data["include"] else inverted_binary, (data["bbox"][0], data["bbox"][1]), binary_mask)
 
-       # x1 = bx1
-       # y1 = by1
+       if data["include"]:
+        bx1, by1, bx2, by2 = bbox
+        dx1, dy1, dx2, dy2 = data["bbox"]
+        cx1, cy1, cx2, cy2 = composite_bbox
 
-       composite_mask = ImageChops.composite(positioned, composite_mask, positioned)
-       composite_mask.save(os.path.join(os.getcwd(), f"app/test_images/dataset_composite_mask_{step}.png"))
+        x1 = dx1 if dx1 < cx1 else cx1
+        y1 = dy1 if dy1 < cy1 else cy1
+        x2 = dx2 if dx2 > cx2 else cx2
+        y2 = dy2 if dy2 > cy2 else cy2
 
-       x1 = dx1 if dx1 < cx1 else cx1
-       y1 = dy1 if dy1 < cy1 else cy1
-       x2 = dx2 if dx2 > cx2 else cx2
-       y2 = dy2 if dy2 > cy2 else cy2
-       composite_bbox = tuple[int, int, int, int]([x1, y1, x2, y2])
+        composite_bbox = tuple[int, int, int, int]([x1, y1, x2, y2])
+
+    print(f"composite_bbox: {composite_bbox}")
+    positioned = Image.new("L", size = image.size, color=0)
+    print(f"positioned: {positioned}")
+    print(f"composite_mask: {composite_mask}")
+    positioned.paste(composite_mask, mask=composite_mask)
+    positioned.save(os.path.join(os.getcwd(), "app/test_images/dataset-positioned-mask.png"))
+    composite_mask = positioned
+
+    # x1 = bx1
+    # y1 = by1
+
+    # composite_mask = ImageChops.composite(positioned, composite_mask, positioned)
+    # composite_mask.save(os.path.join(os.getcwd(), f"app/test_images/dataset_composite_mask_{step}.png"))
+
+    width_scale = 1024 / image.width
+    height_scale = 1024 / image.height
+    scale = min(width_scale, height_scale)
+    resized_image = image.resize((int(image.width * scale), int(image.height * scale)))
+    width_scale = 1024 / composite_mask.width
+    height_scale = 1024 / composite_mask.height
+    scale = min(width_scale, height_scale)
+    composite_mask = composite_mask.resize((int(math.floor(composite_mask.width * scale)), int(math.floor(composite_mask.height * scale))))
+
+    composite_bbox = [int(n * scale) for n in composite_bbox]
+
+
+    padded_image = ImageOps.pad(resized_image, (1024, 1024), color=(0, 0, 0, 255))
+    padded_image.save(os.path.join(os.getcwd(), "app/test_images/dataset-padded-image.png"))
+    padded_mask = ImageOps.pad(composite_mask, (1024, 1024), color=0)
+
+    x1, y1, x2, y2 = composite_bbox
+    x1 = padded_mask.width // 2 - composite_mask.width // 2 + x1
+    y1 = padded_mask.height // 2 - composite_mask.height // 2 + y1
+    x2 = padded_mask.width // 2 - composite_mask.width // 2 + x2
+    y2 = padded_mask.height // 2 - composite_mask.height // 2 + y2
+
+    composite_bbox = [x1, y1, x2, y2]
+    composite_mask = padded_mask
+    image = padded_image
+
+    # scale_x = 1024 / (x2 - x1)
+    # scale_y = 1024 / (y2 - y1)
+    # scale = min(scale_x, scale_y)
+
+    # composite_bbox = [
+    #     padded_image.width // 2 - resized_image.width // 2 + x1,
+    #     padded_image.height // 2 - resized_image.height // 2 + y1,
+    #     padded_image.width // 2 - resized_image.width // 2 + x2,
+    #     padded_image.height // 2 - resized_image.height // 2 + y2
+    # ]
 
     print(f"composite_bbox: {composite_bbox}")
     composite_mask = composite_mask.convert("L")
-    composite_mask.save(os.path.join(os.getcwd(), f"app/test_images/dataset_{step}.png" ))
-    step += 1
-
-    max_size = max(image.width, image.height)
-    size = (max_size, max_size)
+    composite_mask.save(os.path.join(os.getcwd(), f"app/test_images/dataset-padded-mask.png"))
 
     mid_x = image.width // 2
     mid_y = image.height // 2
@@ -229,7 +270,7 @@ async def create_set(image_data: str, masks: List[MaskData], collection: str, to
     mirrored_bbox = (mid_x - (x2 - mid_x), y1, mid_x - (x1 - mid_x), y2)
     flipped_bbox = (x1, mid_y - (y2 - mid_y), x2, mid_y - (y1 - mid_y))
 
-    grey_bg = Image.new(mode="RGB", size=size, color=(127, 127, 127))
+    grey_bg = Image.new(mode="RGB", size=(1024, 1024), color=(127, 127, 127))
 
     def grey(image):
         positioned, centered = generate_images(image, grey_bg, composite_bbox, composite_mask)
@@ -259,7 +300,7 @@ async def create_set(image_data: str, masks: List[MaskData], collection: str, to
             save_to_dataset(centered, object_caption)
 
 
-    white_bg = Image.new(mode="RGB", size=size, color=(255, 255, 255))
+    white_bg = Image.new(mode="RGB", size=(1024, 1024), color=(255, 255, 255))
 
     def white(image):
         positioned, centered = generate_images(image, white_bg, composite_bbox, composite_mask)
@@ -292,7 +333,7 @@ async def create_set(image_data: str, masks: List[MaskData], collection: str, to
 
     rng = np.random.default_rng()
 
-    noise_bg = Image.fromarray((rng.standard_normal(size=(max_size, max_size, 3)) + 1 * 255).astype(np.uint8))
+    noise_bg = Image.fromarray((rng.standard_normal(size=(1024, 1024, 3)) + 1 * 255).astype(np.uint8))
 
     def noise(image):
 
@@ -325,9 +366,9 @@ async def create_set(image_data: str, masks: List[MaskData], collection: str, to
         else:
             save_to_dataset(centered, object_caption)
 
-    random_color_bg = Image.new("RGB", size=size, color=(random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)))
+    random_color_bg = Image.new("RGB", size=(1024, 1024), color=(random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)))
 
-    random_color_bg = Image.new("RGB", size=size, color=(random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)))
+    random_color_bg = Image.new("RGB", size=(1024, 1024), color=(random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)))
     def random_color(image):
 
         positioned, centered = generate_images(image, random_color_bg, composite_bbox, composite_mask)
@@ -393,9 +434,11 @@ async def create_set(image_data: str, masks: List[MaskData], collection: str, to
     enhancer = ImageEnhance.Brightness(image)
     brightness_variant = enhancer.enhance(random.random() / 2)
 
+    grey_bg_brightness_variant_img = grey_bg.copy()
+
     def brightness(image):
 
-        grey_bg_brightness_variant_img = grey_bg.copy()
+
         positioned, centered = generate_images(brightness_variant, grey_bg_brightness_variant_img, composite_bbox, composite_mask)
 
         n = random.randint(0,1)
@@ -584,10 +627,6 @@ async def train(
             project_config=accelerator_project_config,
         )
 
-    # Disable AMP for MPS.
-    # if torch.backends.mps.is_available():
-    #     accelerator.native_amp = False
-
     tokenizer_1=CLIPTokenizer.from_pretrained(os.path.join(os.getcwd(), "../models/sdxl-base-1.0"), subfolder="tokenizer")
     tokenizer_2=CLIPTokenizer.from_pretrained(model_path, subfolder="tokenizer_2")
     noise_scheduler = DDPMScheduler.from_pretrained(model_path, subfolder="scheduler")
@@ -622,9 +661,9 @@ async def train(
     with torch.no_grad():
 
          for token_id in placeholder_token_ids:
-             token_embeds[token_id] = token_embeds[initializer_token_id].clone()
+             token_embeds[token_id] = token_embeds[initializer_token_id].clone().to(device)
          for token_id in placeholder_token_ids_2:
-             token_embeds_2[token_id] = token_embeds_2[initializer_token_id_2].clone()
+             token_embeds_2[token_id] = token_embeds_2[initializer_token_id_2].clone().to(device)
         # Step 1: Resize (if not done already)
         # text_encoder_1.resize_token_embeddings(len(tokenizer_1))
         # text_encoder_2.resize_token_embeddings(len(tokenizer_2))
@@ -668,8 +707,7 @@ async def train(
         #     print(f"Token {token_id} device:", weight_2[token_id].device)
 
 
-    # text_encoder_1.to(device, dtype=weight_dtype)
-    # text_encoder_2.to(device, dtype=weight_dtype)
+
 
     vae.requires_grad_(False)
     unet.requires_grad_(False)
@@ -683,6 +721,9 @@ async def train(
 
     text_encoder_1.gradient_checkpointing_enable()
     text_encoder_2.gradient_checkpointing_enable()
+
+    text_encoder_1.to(device, dtype=weight_dtype)
+    text_encoder_2.to(device, dtype=weight_dtype)
 
     if is_xformers_available():
         import xformers
@@ -797,7 +838,7 @@ async def train(
         global_step = int(path.split("-")[1])
 
         text_encoder_1.load_state_dict(checkpoint["model"])
-        optimizer = torch.optim.AdamW(text_encoder_1.parameters(), lr=lr)
+        optimizer = torch.optim.AdamW(text_encoder_1.parameters(), lr=lr).to(device)
         optimizer.load_state_dict(checkpoint["optimizer"])
         lr_scheduler.load_state_dict(checkpoint["scheduler"])
 
@@ -816,12 +857,12 @@ async def train(
         orig_embeds_params = accelerator.unwrap_model(text_encoder_1).get_input_embeddings().weight.data.clone()
         orig_embeds_params_2 = accelerator.unwrap_model(text_encoder_2).get_input_embeddings().weight.data.clone()
     else:
-        orig_embeds_params = text_encoder_1.get_input_embeddings().weight.data.clone()
-        orig_embeds_params_2 = text_encoder_2.get_input_embeddings().weight.data.clone()
+        orig_embeds_params = text_encoder_1.get_input_embeddings().weight.data.clone().to(device)
+        orig_embeds_params_2 = text_encoder_2.get_input_embeddings().weight.data.clone().to(device)
 
     with torch.no_grad():
-        dummy_input = torch.tensor([placeholder_token_ids[0]], dtype=torch.long, device=device)
-        dummy_mask = torch.tensor([[1]], dtype=torch.long, device=device)
+        dummy_input = torch.tensor([placeholder_token_ids[0]], dtype=torch.long, device=device).to(device)
+        dummy_mask = torch.tensor([[1]], dtype=torch.long, device=device).to(device)
         _ = text_encoder_1(input_ids=dummy_input, attention_mask=dummy_mask, output_hidden_states=True)
 
     for param in text_encoder_1.parameters():

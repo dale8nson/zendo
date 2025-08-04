@@ -10,7 +10,7 @@ export const ImageUploadForm = ({ onUpload }: { onUpload?: () => void }) => {
 
   const uploadMutation = useMutation({
     mutationFn: async (formData: FormData) => {
-      return fetch('/api/upload', {
+      return fetch('http://127.0.0.1:8000/api/upload', {
         method: 'POST',
         body: formData,
       })
@@ -21,7 +21,7 @@ export const ImageUploadForm = ({ onUpload }: { onUpload?: () => void }) => {
   })
 
   const [image, setImage] = useState<File | null>(null)
-  const [label, setLabel] = useState('')
+  const [collection, setCollection] = useState('')
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -34,7 +34,6 @@ export const ImageUploadForm = ({ onUpload }: { onUpload?: () => void }) => {
     if (file && file.type.startsWith('image/')) {
       setImage(file)
       const url = URL.createObjectURL(file)
-      console.log(`url:${url.slice(0, 29)}...`)
       setPreviewUrl(url)
     }
   }
@@ -54,7 +53,7 @@ export const ImageUploadForm = ({ onUpload }: { onUpload?: () => void }) => {
 
     const formData = new FormData()
     formData.append('file', image)
-    formData.append('label', label)
+    formData.append('collection', collection)
 
     // This triggers the mutation (and its onSuccess, which invalidates the images query)
     uploadMutation.mutate(formData, {
@@ -65,7 +64,6 @@ export const ImageUploadForm = ({ onUpload }: { onUpload?: () => void }) => {
         toast.success('Upload successful!')
         setImage(null)
         setPreviewUrl(null)
-        setLabel('')
         setUploading(false)
         queryClient.invalidateQueries({ queryKey: ['images'], refetchType: 'all' })
       },
@@ -76,7 +74,7 @@ export const ImageUploadForm = ({ onUpload }: { onUpload?: () => void }) => {
       },
     })
 
-    setUploading(true) // Optional: If you want to show loading UI while uploadMutation is pending
+    setUploading(true)
   }
 
   return (
@@ -103,7 +101,7 @@ export const ImageUploadForm = ({ onUpload }: { onUpload?: () => void }) => {
         {previewUrl ? (
           <img src={previewUrl} alt="Preview" className="h-full object-contain" />
         ) : (
-          <span className="text-gray-500">Drag & Drop or Click to Select an Image</span>
+          <span className="text-gray-500 p-2">Drag & Drop or Click to Select an Image</span>
         )}
         <input
           type="file"
@@ -116,10 +114,10 @@ export const ImageUploadForm = ({ onUpload }: { onUpload?: () => void }) => {
       </label>
       <input
         type="text"
-        placeholder="Enter label (optional)"
+        placeholder="default"
+        defaultValue="default"
         className="w-full p-2 border rounded-md"
-        value={label}
-        onChange={(e) => setLabel(e.target.value)}
+        onChange={(e) => setCollection(e.target.value)}
       />
       <button
         type="submit"

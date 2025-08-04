@@ -1,13 +1,7 @@
-// app/page.tsx
-
-// app/page.tsx
-
-import { ImageUploadForm } from '@/components/ImageUploadForm'
-import { ImageGallery } from '@/components/ImageGallery'
-import { Logo } from '@/components/Logo'
 import { Ribbon } from '@/components/Ribbon'
 import { ImageEditor } from '@/components/ImageEditor'
 import { Preview } from '@/components/Preview'
+import { LeftSideBar } from '@/components/LeftSideBar'
 import { RightSideBar } from '@/components/RightSideBar'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import { ImageControlPanel } from '@/components/ImageControlPanel'
@@ -20,12 +14,7 @@ export default function HomePage() {
       </header>
       <ResizablePanelGroup direction="horizontal" className="flex overflow-hidden w-full h-full">
         <ResizablePanel defaultSize={15}>
-          {/* <aside className="w-full bg-neutral-900 border-r border-neutral-800 p-2"> */}
-          <h2 className="text-xs font-semibold text-neutral-400 mb-2">Upload Image</h2>
-          <ImageUploadForm />
-          <h2 className="text-xs font-semibold text-neutral-400 mt-6 mb-2">Gallery</h2>
-          <ImageGallery />
-          {/* </aside> */}
+          <LeftSideBar />
         </ResizablePanel>
         <ResizableHandle />
         <ResizablePanel

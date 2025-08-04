@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routes import upload, metadata, predict, images, image, prompts, caption, score, masks, generate, refine, inpaint
+from .routes import upload, metadata, predict, images, image, prompts, caption, score, masks, generate, refine, inpaint, cropped_image_caption, dataset, ws
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import os
@@ -12,8 +12,8 @@ from .services.SAM import init_SAM
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await init_clip()
-    await init_SDXL()
+    # await init_clip()
+    # await init_SDXL()
     await init_SAM()
 
     yield
@@ -37,16 +37,19 @@ else:
 # app.include_router(example.router)
 app.include_router(upload.router, prefix="/api")
 app.include_router(metadata.router, prefix="/api")
-app.include_router(predict.router, prefix="/api")
+# app.include_router(predict.router, prefix="/api")
 app.include_router(images.router, prefix="/api")
 app.include_router(image.router, prefix="/api")
 app.include_router(caption.router, prefix="/api")
 app.include_router(score.router, prefix="/api")
-app.include_router(generate.router, prefix="/api")
-app.include_router(refine.router, prefix="/api")
-app.include_router(masks.router, prefix="/api")
-app.include_router(inpaint.router, prefix="/api")
-app.include_router(prompts.router, prefix="/api", tags=["prompts"])
+app.include_router(dataset.router, prefix="/api")
+# app.include_router(generate.router, prefix="/api")
+# app.include_router(refine.router, prefix="/api")
+# app.include_router(masks.router, prefix="/api")
+# app.include_router(inpaint.router, prefix="/api")
+# app.include_router(prompts.router, prefix="/api", tags=["prompts"])
+app.include_router(cropped_image_caption.router, prefix="/api")
+app.include_router(ws.router, prefix="/ws")
 
 
 static_dir = "static"

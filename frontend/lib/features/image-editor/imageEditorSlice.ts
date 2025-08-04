@@ -1,18 +1,35 @@
 import { createSlice } from '@reduxjs/toolkit'
-import { MetadataEntry } from '@/components/ImageGallery'
 
 interface ImageEditorState {
   selectedImage: MetadataEntry | null
   caption: string | null
   editorCanvasData: string | null
-  previewCanvasData: string | null
+  status: {}
+  maskData: MaskData[]
+  maskIndex: { value: number }
+  masks: { [key: string]: HTMLImageElement }[]
+  selectedMaskData: MaskData[]
+  selectedMasks: { id: string; imageData: string }[]
+  collection: string
+  maskBox: number[]
+  scaledSelectionBox: number[]
+  objectCaption: string
 }
 
 const initialState: ImageEditorState = {
   selectedImage: null,
   caption: null,
   editorCanvasData: null,
-  previewCanvasData: null,
+  status: {},
+  maskData: [],
+  maskIndex: { value: 0 },
+  masks: [],
+  selectedMaskData: [],
+  collection: 'default',
+  maskBox: [0, 0, 0, 0],
+  scaledSelectionBox: [0, 0, 0, 0],
+  objectCaption: '',
+  selectedMasks: [],
 }
 
 const imageEditorSlice = createSlice({
@@ -28,13 +45,80 @@ const imageEditorSlice = createSlice({
     setEditorCanvasData(state, action) {
       state.editorCanvasData = action.payload
     },
-    setPreviewCanvasData(state, action) {
-      state.previewCanvasData = action.payload
+    setEditorCanvasStatus(state, action) {
+      state.status = action.payload
+    },
+    setMaskData: (state, action) => {
+      state.maskData = action.payload
+    },
+    setMasks(state, action) {
+      state.masks = action.payload
+    },
+    setMaskIndex(state, action) {
+      state.maskIndex = { value: action.payload }
+    },
+    setSelectedMaskData(state, action) {
+      state.selectedMaskData = action.payload
+    },
+    setCollection(state, action) {
+      state.collection = action.payload
+    },
+    setMaskBox(state, action) {
+      state.maskBox = action.payload
+    },
+    setScaledSelectionBox(state, action) {
+      state.scaledSelectionBox = action.payload
+    },
+    setObjectCaption(state, action) {
+      state.objectCaption = action.payload
+    },
+    setSelectedMasks(state, action) {
+      state.selectedMasks = action.payload
+    },
+    nextMask(state) {
+      let maskData = state.maskData
+      const index = state.maskIndex.value
+      maskData[index].active = false
+      maskData[(index + 1) % maskData.length].active = true
+      state.maskIndex = { value: (index + 1) % maskData.length }
+      state.maskData = maskData
+    },
+    includeMask(state, action) {
+      const index = action.payload
+      const maskData = [...state.maskData]
+      if (index < 0 || index >= maskData.length) return
+      maskData[index].include = true
+      maskData[index].exclude = false
+      state.maskData = maskData
+    },
+    excludeMask(state, action) {
+      const index = action.payload
+      const maskData = [...state.maskData]
+      if (index < 0 || index >= maskData.length) return
+      maskData[index].include = false
+      maskData[index].exclude = true
+      state.maskData = maskData
     },
   },
 })
 
-export const { setSelectedImage, setCaption, setEditorCanvasData, setPreviewCanvasData } =
-  imageEditorSlice.actions
+export const {
+  setSelectedImage,
+  setCaption,
+  setEditorCanvasData,
+  setEditorCanvasStatus,
+  setMaskData,
+  setMasks,
+  setMaskIndex,
+  setSelectedMaskData,
+  setCollection,
+  setMaskBox,
+  setScaledSelectionBox,
+  setObjectCaption,
+  setSelectedMasks,
+  nextMask,
+  includeMask,
+  excludeMask,
+} = imageEditorSlice.actions
 
 export default imageEditorSlice.reducer

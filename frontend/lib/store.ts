@@ -3,6 +3,7 @@ import imageEditorReducer from './features/image-editor/imageEditorSlice'
 import controlPanelReducer from './features/control-panel/controlPanelSlice'
 import previewReducer from './features/preview/previewSlice'
 import promptPanelReducer from './features/prompt-panel/promptPanelSlice'
+import layerTableReducer from './features/layer-table/layerTableSlice'
 
 export const makeStore = () => {
   return configureStore({
@@ -11,6 +12,7 @@ export const makeStore = () => {
       controlPanel: controlPanelReducer,
       preview: previewReducer,
       promptPanel: promptPanelReducer,
+      layerTable: layerTableReducer,
     },
   })
 }

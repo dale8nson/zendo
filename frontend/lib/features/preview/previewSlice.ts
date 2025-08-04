@@ -1,6 +1,4 @@
 import { createSlice } from '@reduxjs/toolkit'
-import { MetadataEntry } from '@/components/ImageGallery'
-
 //         list(dict(str, any)): A list over records for masks. Each record is
 // a dict containing the following keys:
 //   segmentation (dict(str, any) or np.ndarray): The mask. If
@@ -17,34 +15,38 @@ import { MetadataEntry } from '@/components/ImageGallery'
 //   crop_box (list(float)): The crop of the image used to generate
 //     the mask, given in XYWH format.
 
-interface MaskData {
-  segmentation: string
-  bbox: [number, number, number, number]
-  area: number
-  predicted_iou: number
-  point_coords: [[number]]
-  stability_score: number
-  crop_box: [number, number, number, number]
-}
-
 interface PreviewState {
-  previewCanvasData: string | null
+  previewCanvasData: string
   shouldDrawCanvas: boolean
   shouldDrawMasks: boolean
-  maskData: [MaskData] | null
+  maskData: MaskData[]
   progress: number
   history: string[]
-  currentHistoryIndex: { value: number }
+  currentHistoryIndex: number
+  status: {}
+  scaledSelectionBox: number[]
+  maskIndex: { value: number }
+  maskBox: number[]
+  selectedMaskData: MaskData[]
+  selectedMasks: SelectedMask[]
+  layeredHistory: Layer[][]
 }
 
 const initialState: PreviewState = {
-  previewCanvasData: null,
+  previewCanvasData: '',
   shouldDrawCanvas: false,
   shouldDrawMasks: false,
-  maskData: null,
+  maskData: [],
   progress: 0,
   history: [],
-  currentHistoryIndex: { value: -1 },
+  currentHistoryIndex: -1,
+  status: {},
+  scaledSelectionBox: [0, 0, 0, 0],
+  maskIndex: { value: 0 },
+  maskBox: [0, 0, 0, 0],
+  selectedMaskData: [],
+  selectedMasks: [],
+  layeredHistory: [],
 }
 
 const previewSlice = createSlice({
@@ -70,7 +72,49 @@ const previewSlice = createSlice({
       state.history = [...state.history, action.payload]
     },
     setCurrentHistoryIndex(state, action) {
-      state.currentHistoryIndex = { ...state.currentHistoryIndex, value: action.payload }
+      state.currentHistoryIndex = action.payload
+    },
+    setPreviewStatus(state, action) {
+      state.status = action.payload
+    },
+    setScaledSelectionBox(state, action) {
+      state.scaledSelectionBox = action.payload
+    },
+    setMaskIndex(state, action) {
+      state.maskIndex = { value: action.payload }
+    },
+    setMaskBox(state, action) {
+      state.maskBox = action.payload
+    },
+    setSelectedMaskData(state, action) {
+      state.selectedMaskData = action.payload
+    },
+    setSelectedMasks(state, action) {
+      state.selectedMasks = action.payload
+    },
+    nextMask(state) {
+      let maskData = state.maskData
+      const index = state.maskIndex.value
+      maskData[index].active = false
+      maskData[(index + 1) % maskData.length].active = true
+      state.maskIndex = { value: (index + 1) % maskData.length }
+      state.maskData = maskData
+    },
+    includeMask(state, action) {
+      const index = action.payload
+      const maskData = [...state.maskData]
+      if (index < 0 || index >= maskData.length) return
+      maskData[index].include = true
+      maskData[index].exclude = false
+      state.maskData = maskData
+    },
+    excludeMask(state, action) {
+      const index = action.payload
+      const maskData = [...state.maskData]
+      if (index < 0 || index >= maskData.length) return
+      maskData[index].include = false
+      maskData[index].exclude = true
+      state.maskData = maskData
     },
   },
 })
@@ -83,6 +127,15 @@ export const {
   setProgress,
   appendHistory,
   setCurrentHistoryIndex,
+  setPreviewStatus,
+  setScaledSelectionBox,
+  setMaskIndex,
+  setMaskBox,
+  setSelectedMaskData,
+  setSelectedMasks,
+  nextMask,
+  includeMask,
+  excludeMask,
 } = previewSlice.actions
 
 export default previewSlice.reducer

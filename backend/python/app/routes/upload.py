@@ -1,4 +1,5 @@
 from fastapi import APIRouter, File, UploadFile, HTTPException, Form
+from typing import Annotated
 from fastapi.responses import JSONResponse
 import shutil
 from app.services.metadata_handler import save_metadata_entry
@@ -17,7 +18,7 @@ router = APIRouter()
 # UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
 @router.post("/upload")
-async def upload_image(file: UploadFile = File(...), label: str = Form(...)):
+async def upload_image(file: Annotated[UploadFile, Form()], collection: Annotated[str, Form()]):
     print(f"{__file__}: UPLOADS_DIR: {UPLOADS_DIR}")
     original_filename = file.filename
     if original_filename:
@@ -40,16 +41,16 @@ async def upload_image(file: UploadFile = File(...), label: str = Form(...)):
             print(f"img width:{width}, height:{height}")
         metadata = {
             "filename": new_filename,
-            "label": label,
             "timestamp": datetime.utcnow().isoformat(),
             "original_filename": original_filename,
             "width": width,
-            "height": height
+            "height": height,
+            "collection": collection
         }
 
         print(metadata)
         await save_metadata_entry(metadata)
 
-        return JSONResponse(content={"status": "success", "filename": file.filename, "label": label})
+        return JSONResponse(content={"status": "success", "filename": file.filename})
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

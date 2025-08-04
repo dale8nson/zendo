@@ -9,7 +9,7 @@ click==8.2.1
 coloredlogs==15.0.1
 contourpy==1.3.2
 cycler==0.12.1
-diffusers==0.33.1
+-e git+https://dale8nson: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@github.com/dale8nson/zendo.git@f9697680a3b53c3a01b7d8de2fc4701fd614eded#egg=diffusers&subdirectory=backend/diffusers
 fastapi==0.115.12
 filelock==3.18.0
 flatbuffers==25.2.10
@@ -90,5 +90,9 @@ typing-inspection==0.4.0
 typing_extensions==4.13.2
 urllib3==2.4.0
 uvicorn==0.34.2
+watchfiles==1.1.0
 wcwidth==0.2.13
 websockets==15.0.1
+zendoai @ file:///Users/dale8nson/dev/zendo/backend/rust/target/wheels/zendoai-0.1.0-cp312-cp312-macosx_11_0_arm64.whl#sha256=23b184e6209b47f44e9823874bd2b2d6b777fa006c809854d6d5b38e19bcbe48
+-e git+https://dale8nson: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@github.com/dale8nson/zendo.git@f9697680a3b53c3a01b7d8de2fc4701fd614eded#egg=zendolib
+zipp==3.23.0

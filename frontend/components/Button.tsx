@@ -1,3 +1,5 @@
+'use cient'
+
 import { MouseEventHandler, useEffect, useRef, useState } from 'react'
 
 export function Button({

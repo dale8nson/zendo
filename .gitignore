@@ -26,3 +26,9 @@ test_images/
 test_masks/
 files.rtf
 backend/diffusers/
+stable-diffusion-xl-inpainting-1.0/
+zendoai.db
+user/
+stable-diffusion-x4-upscaler/
+sam_model/
+sam_processor/

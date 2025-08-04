@@ -143,3 +143,14 @@ async def score_caption(image: Image.Image, caption: str) -> dict:
     print(f"Similarity: {similarity.item():.2f}")
 
     return {"score": similarity.item()}
+
+
+async def get_mask_label(image: str) -> dict:
+    global model, tokenizer
+
+    img_tensor = cast(torch.Tensor, preprocess_val(image))
+    img_tensor = img_tensor.unsqueeze(0).to(device)
+
+    with torch.no_grad():
+        image_features = model.encode_image(img_tensor)
+        image_features /= image_features.norm(dim=-1, keepdim=True)

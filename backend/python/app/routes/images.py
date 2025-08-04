@@ -28,7 +28,7 @@ def get_images():
     results: List[Dict[str, Any]] = []
 
     for datum in metadata:
-        id_, filename, original_filename, label, prediction, timestamp, width, height = datum
+        id_, filename, original_filename, label, prediction, timestamp, width, height, collection = datum
         filename = Path(str(filename))
         path = Path(UPLOADS_DIR) / filename
         print(f"path: {path}")
@@ -51,7 +51,8 @@ def get_images():
                         "timestamp": timestamp,
                         "image_data": encoded,
                         "width": width,
-                        "height": height
+                        "height": height,
+                        "collection": collection
                     })
             print(f"len(results): {len(results)}")
 

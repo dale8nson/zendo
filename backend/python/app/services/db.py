@@ -33,6 +33,7 @@ def init_db(conn=None):
     timestamp TEXT DEFAULT CURRENT_TIMESTAMP,
     width INTEGER,
     height INTEGER
+    collection TEXT DEFAULT 'default'
     )"""
     )
     conn.commit()

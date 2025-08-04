@@ -1,24 +1,21 @@
 'use client'
 
+import { useEffect } from 'react'
 import { useQuery, queryOptions, useQueryClient } from '@tanstack/react-query'
 import { useAppStore, useAppDispatch, useAppSelector } from '@/lib/hooks'
-import { setSelectedImage, setEditorCanvasData } from '@/lib/features/image-editor/imageEditorSlice'
-
-export interface MetadataEntry {
-  id: number
-  filename: string
-  original_filename: string
-  label: string | null
-  prediction: string | null
-  timestamp: string
-  image_data: string
-  width: number
-  height: number
-}
+import {
+  setSelectedImage,
+  setEditorCanvasData,
+  setCollection,
+  setSelectedMaskData,
+  setMaskData,
+  setMasks,
+  setMaskIndex,
+} from '@/lib/features/image-editor/imageEditorSlice'
+import { ScrollArea, ScrollBar } from './ui/scroll-area'
 
 async function fetchImages(): Promise<MetadataEntry[]> {
-  // const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'
-  const res = await fetch(`/api/images`, {
+  const res = await fetch(`http://127.0.0.1:8000/api/images`, {
     headers: {
       'Content-Type': 'application/json',
     },
@@ -59,6 +56,14 @@ export const ImageGallery = () => {
       staleTime: Infinity,
     })
   )
+
+  const collection = useAppSelector((state) => state.imageEditor.collection)
+
+  useEffect(() => {
+    dispatch(setCollection('nsfw'))
+  }, [])
+
+  useEffect(() => {}, [collection])
 
   const handleDelete = async (
     e: React.MouseEvent<HTMLImageElement, MouseEvent>,
@@ -102,38 +107,52 @@ export const ImageGallery = () => {
   }
 
   return (
-    <div className="relative z-10 max-w-[1200px] mx-auto px-4 py-8">
-      <h2 className="text-2xl font-semibold mb-4 text-center text-white">Uploaded Images</h2>
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 gap-6 w-full">
-        {entries.map((entry) => (
-          <div
-            key={entry.filename}
-            className="relative z-10 bg-zinc-900 rounded-xl shadow-lg border border-zinc-700 overflow-hidden hover:scale-110 transition-transform duration-300 w-full h-auto"
-            onClick={() => dispatch(setSelectedImage(entry))}
-          >
-            <img
-              src={`data:image/${entry.filename.split('.').pop()};base64,${entry.image_data}`}
-              alt={entry.label || entry.original_filename}
-              className="relative z-0 w-full h-48 aspect-auto object-cover bg-gray-900 object-top "
-            />
-            <button className="z-50 rounded-full bg-red-600 text-white p-1 absolute top-2 right-2">
+    <ScrollArea
+      className={`flex flex-col z-10 max-w-[1200px] mx-auto px-4 py-8 h-[${entries.length * 400}px]`}
+    >
+      <div
+        className={`relative grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full h-[${entries.length * 400}px] m-0 overflow-y-scroll`}
+      >
+        {entries
+          .filter((entry) => entry.collection == collection)
+          .map((entry) => (
+            <div
+              key={entry.filename}
+              className="relative z-10 bg-zinc-900 rounded-xl shadow-lg border border-zinc-700 overflow-hidden hover:scale-110 transition-transform duration-300 w-full h-auto aspect-square"
+              onClick={() => {
+                dispatch(setSelectedImage(entry))
+                dispatch(setSelectedMaskData([]))
+                dispatch(setMaskData([]))
+                dispatch(setMaskIndex(0))
+                dispatch(setMasks([]))
+              }}
+            >
               <img
-                src="/delete.svg"
-                alt="Delete"
-                className="w-4 h-4"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  handleDelete(e, entry)
-                }}
+                src={`data:image/${entry.filename.split('.').pop()};base64,${entry.image_data}`}
+                alt={entry.original_filename}
+                className="relative z-0 w-full h-48 aspect-auto object-center object-cover bg-gray-900 "
               />
-            </button>
-            <div className="p-3">
-              <p className="text-sm text-gray-200 truncate">{entry.label || 'No label'}</p>
-              <p className="text-xs text-gray-500">{new Date(entry.timestamp).toLocaleString()}</p>
+              <button className="z-50 rounded-full bg-neutral-600 text-white p-1 absolute top-2 right-2">
+                <img
+                  src="/delete.svg"
+                  alt="Delete"
+                  className="w-4 h-4"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleDelete(e, entry)
+                  }}
+                />
+              </button>
+              <div className="p-3">
+                <p className="text-sm text-gray-200 truncate">{entry.label || 'No label'}</p>
+                <p className="text-xs text-gray-500">
+                  {new Date(entry.timestamp).toLocaleString()}
+                </p>
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
+        <ScrollBar orientation="vertical" />
       </div>
-    </div>
+    </ScrollArea>
   )
 }

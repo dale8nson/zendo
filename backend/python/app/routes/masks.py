@@ -15,19 +15,19 @@ async def get_masks(data: MaskRequest):
 
 manager = ConnectionManager()
 
-@router.websocket("/masks")
-async def websocket_endpoint(ws: WebSocket):
-    global manager
-    await manager.connect(ws)
+# @router.websocket("/masks")
+# async def websocket_endpoint(ws: WebSocket):
+#     global manager
+#     await manager.connect(ws)
 
-    try:
-        async for message in ws.iter_json():
-            await ws.send_json({"status": "started"})
-            response = await generate_masks(data_url=message["image"])
-            await ws.send_json(response)
+#     try:
+#         async for message in ws.iter_json():
+#             await ws.send_json({"status": "started"})
+#             response = await generate_masks(data_url=message["image"])
+#             await ws.send_json(response)
 
-    except WebSocketDisconnect:
-        manager.disconnect(ws)
-    except Exception as e:
-        manager.disconnect(ws)
-        raise e
+#     except WebSocketDisconnect:
+#         manager.disconnect(ws)
+#     except Exception as e:
+#         manager.disconnect(ws)
+#         raise e
