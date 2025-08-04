@@ -619,6 +619,14 @@ async def train(
     model_path = os.path.join(os.getcwd(), "../models/sdxl-base-1.0")
     output_dir = os.path.join(os.getcwd(), f"../models/user/{collection}")
 
+    weight_dtype = torch.float32
+
+    if torch.cuda.is_available():
+        if accelerator.mixed_precision == "fp16":
+            weight_dtype = torch.float16
+        elif accelerator.mixed_precision == "bf16":
+            weight_dtype = torch.bfloat16
+
     if torch.cuda.is_available():
         accelerator_project_config = ProjectConfiguration(project_dir=output_dir)
         accelerator = Accelerator(
@@ -790,7 +798,7 @@ async def train(
             text_encoder_1, text_encoder_2, optimizer, train_dataloader, lr_scheduler
         )
 
-    weight_dtype = torch.float32
+
     unet.to(accelerator.device if (torch.cuda.is_available()) else device, dtype=weight_dtype)
     vae.to(accelerator.device if (torch.cuda.is_available()) else device, dtype=weight_dtype)
     text_encoder_2.to(accelerator.device if (torch.cuda.is_available()) else device, dtype=weight_dtype)
@@ -1096,10 +1104,10 @@ async def train(
                     safe_serialization=True,
                 )
 
-        pipe.load_textual_inversion(os.path.join(output_dir, token))
+        # pipe.load_textual_inversion(os.path.join(output_dir, token))
         if refiner is not None:
             refiner.to(device)
-            refiner.load_textual_inversion(os.path.join(output_dir, token))
+
         if inpainter is not None:
             inpainter.to(device)
             inpainter.load_textual_inversion(os.path.join(output_dir, token))
