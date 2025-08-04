@@ -193,11 +193,12 @@ async def websocket_send(uri: str, message: str):
 
 
 @router.websocket("/load_inversion")
-async def load_inversion(collection, token):
+async def load_inversion(ws: WebSocket):
+    await ws.send_json({"status": "started"})
 
     uri="ws://10.0.0.22:8002/ws/inversion"
 
-    message=json.dumps({"collection": collection, "token": token })
+    # message=json.dumps({"collection": collection, "token": token })
 
     conn = await connect(uri)
     await conn.send_json(message)
@@ -206,7 +207,7 @@ async def load_inversion(collection, token):
     while True:
         try:
             message = await conn.recv()
-            path = os.path.join(os.getcwd(), f"../models/user/{collection}/{token}{f"_{i}" if i > 1 else ""}.safetensors")
+            path = os.path.join(os.getcwd(), f"../models/user/{message["collection"]}/{message["token"]}{f"_{i}" if i > 1 else ""}.safetensors")
 
             with open(path, "w") as f:
                 f.write(message)
