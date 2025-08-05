@@ -700,10 +700,16 @@ async def train(
     token_ids = tokenizer_1.encode(initializer_token, add_special_tokens=False)
     token_ids_2 = tokenizer_2.encode(initializer_token, add_special_tokens=False)
 
+    print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
+    print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
+
     initializer_token_id = token_ids[0]
     placeholder_token_ids = tokenizer_1.convert_tokens_to_ids(placeholder_tokens)
     initializer_token_id_2 = token_ids_2[0]
     placeholder_token_ids_2 = tokenizer_2.convert_tokens_to_ids(placeholder_tokens)
+
+    print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
+    print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
 
     # old_weight_1 = text_encoder_1.get_input_embeddings().weight.detach().cpu().clone()
     # old_weight_2 = text_encoder_2.get_input_embeddings().weight.detach().cpu().clone()
@@ -711,8 +717,14 @@ async def train(
     text_encoder_1.resize_token_embeddings(len(tokenizer_1))
     text_encoder_2.resize_token_embeddings(len(tokenizer_2))
 
+    print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
+    print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
+
     token_embeds = text_encoder_1.get_input_embeddings().weight.data
     token_embeds_2 = text_encoder_2.get_input_embeddings().weight.data
+
+    print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
+    print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
 
     with torch.no_grad():
 
