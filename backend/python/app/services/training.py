@@ -619,7 +619,6 @@ async def train(
     print(f"Device: {torch.cuda.get_device_name(0)}")
     print(f"Allocated: {torch.cuda.memory_allocated() / 1024 ** 2:.2f} MiB")
     print(f"Reserved: {torch.cuda.memory_reserved() / 1024 ** 2:.2f} MiB")
-    print(f"accelerate available: {is_accelerate_available()}")
 
     x = torch.randn(1).cuda()
     print("Allocated:", torch.cuda.memory_allocated() / 1024 ** 2, "MiB")
