@@ -1001,6 +1001,9 @@ async def train(
     print(f"accelerator.device: {accelerator.device}")
 
     vae.to(device)
+    vae.enable_tiling()
+    vae.enable_slicing()
+
     unet.to(device)
     text_encoder_1.to(device)
     text_encoder_2.to(device)
