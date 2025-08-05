@@ -627,14 +627,6 @@ async def train(
     model_path = os.path.join(os.getcwd(), "../models/sdxl-base-1.0")
     output_dir = os.path.join(os.getcwd(), f"../models/user/{collection}")
 
-    weight_dtype = torch.float32
-
-    if torch.cuda.is_available():
-        if accelerator.mixed_precision == "fp16":
-            weight_dtype = torch.float16
-        elif accelerator.mixed_precision == "bf16":
-            weight_dtype = torch.bfloat16
-
     if torch.cuda.is_available():
         accelerator_project_config = ProjectConfiguration(project_dir=output_dir)
         accelerator = Accelerator(
