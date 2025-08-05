@@ -595,7 +595,7 @@ async def train(
     max_train_steps=400,
     num_training_steps=400,
     train_batch_size=1,
-    gradient_accumulation_steps=4,
+    gradient_accumulation_steps=1,
     lr=1e-4,
     lr_num_cycles=1,
     betas=(0.9, 0.999),
