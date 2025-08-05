@@ -799,6 +799,8 @@ async def train(
         train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers
     )
 
+    print(f"accelerator.num_processes: {accelerator.num_processes}")
+
     num_warmup_steps_for_scheduler = lr_warmup_steps * accelerator.num_processes if torch.cuda.is_available() else 1
 
     num_training_steps_for_scheduler = max_train_steps * accelerator.num_processes if torch.cuda.is_available() else num_processes
