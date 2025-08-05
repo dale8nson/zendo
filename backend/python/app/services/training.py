@@ -617,6 +617,10 @@ async def train(
     print(f"Allocated: {torch.cuda.memory_allocated() / 1024 ** 2:.2f} MiB")
     print(f"Reserved: {torch.cuda.memory_reserved() / 1024 ** 2:.2f} MiB")
 
+    x = torch.randn(1).cuda()
+    print("Allocated:", torch.cuda.memory_allocated() / 1024 ** 2, "MiB")
+    print("Reserved:", torch.cuda.memory_reserved() / 1024 ** 2, "MiB")
+
     if refiner is not None:
         refiner.to(torch.device("cpu"))
     if inpainter is not None:
