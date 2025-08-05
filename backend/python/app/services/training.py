@@ -612,7 +612,10 @@ async def train(
     global refiner, inpainter
     device = torch.device("mps" if torch.backends.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu")
 
-    print(f"device: {device}")
+    print(f"CUDA available: {torch.cuda.is_available()}")
+    print(f"Device: {torch.cuda.get_device_name(0)}")
+    print(f"Allocated: {torch.cuda.memory_allocated() / 1024 ** 2:.2f} MiB")
+    print(f"Reserved: {torch.cuda.memory_reserved() / 1024 ** 2:.2f} MiB")
 
     if refiner is not None:
         refiner.to(torch.device("cpu"))
