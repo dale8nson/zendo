@@ -1157,6 +1157,11 @@ async def train(
             inpainter.to(device)
             inpainter.load_textual_inversion(os.path.join(output_dir, token))
 
+        if torch.backends.mps.is_available():
+            torch.mps.empty_cache()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
         return {"status":"OK"}
 
     # torch.save({

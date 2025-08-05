@@ -7,9 +7,14 @@ from contextlib import asynccontextmanager
 from .services.clip_model import init_clip
 from .services.SAM import init_SAM
 from app.services.connection_manager import ConnectionManager
+import torch
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    if torch.backends.mps.is_available():
+        torch.mps.empty_cache()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
     # await init_clip()
     # await init_SAM()
     yield
