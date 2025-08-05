@@ -1002,6 +1002,7 @@ async def train(
     unet.to(device)
     text_encoder_1.to(device)
     text_encoder_2.to(device)
+    noise_scheduler.to(device)
 
     for epoch in range(first_epoch, num_train_epochs):
         text_encoder_1.train()
@@ -1022,7 +1023,7 @@ async def train(
                     latents = latents * vae.config.scaling_factor
 
                     # Sample noise that we'll add to the latents
-                    noise = torch.randn_like(latents)
+                    noise = torch.randn_like(latents).to(device)
                     bsz = latents.shape[0]
                     # Sample a random timestep for each image
                     timesteps = torch.randint(0, noise_scheduler.config.num_train_timesteps, (bsz,), device=latents.device)
