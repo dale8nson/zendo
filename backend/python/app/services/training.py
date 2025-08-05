@@ -1005,7 +1005,7 @@ async def train(
                                 text_encoder_2,
                                 placeholder_token_ids_2,
                                 accelerator,
-                                placeholder_token
+                                placeholder_token,
                                 save_path,
                                 safe_serialization=True,
                             )
