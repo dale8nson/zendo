@@ -847,7 +847,7 @@ async def train(
 
     train_dataloader = torch.utils.data.DataLoader(
         train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers
-    ).to(device)
+    )
 
     print(f"accelerator.num_processes: {accelerator.num_processes}")
 
