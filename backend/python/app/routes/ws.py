@@ -1,5 +1,5 @@
 from fastapi import APIRouter, WebSocket
-from app.services.SDXL import inpaint, InpaintRequest, refine, RefineRequest, generate, GenerateRequest, pipe, refiner, inpainter
+from app.services.SDXL import inpaint, InpaintRequest, refine, RefineRequest, generate, GenerateRequest, get_pipe, get_refiner, get_inpainter
 from app.services.SAM import generate_masks, generate_mask
 from app.services.training import create_set, train
 from app.services.connection_manager import ConnectionManager
@@ -199,9 +199,14 @@ async def load_inversion(ws: WebSocket):
     global manager
     await manager.connect(ws)
 
+    pipe = await get_pipe()
+    refiner = await get_refiner()
+    inpainter = await get_inpainter()
+
     async for message in ws.iter_json():
         await ws.send_json({"status": "started"})
-
+        collection = message["collection"]
+        token = message["token"]
         uri="ws://10.0.0.22:8002/ws/inversion"
 
         conn = await connect(uri)
@@ -211,14 +216,15 @@ async def load_inversion(ws: WebSocket):
         while True:
             try:
                 message = await conn.recv()
-                message = json.loads(message)
-                print(f"message.keys(): {message.keys()}")
-                if 'error' in message.keys():
-                    print(f"error: {message["error"]}")
-                    return {"status": message["error"]}
-                path = os.path.join(os.getcwd(), f"../models/user/{message["collection"]}/{message["token"]}{f"_{i}" if i > 1 else ""}.safetensors")
+                print(f"message: {message}")
+                # message = json.loads(message)
+                # print(f"message.keys(): {message.keys()}")
+                # if 'error' in message.keys():
+                #     print(f"error: {message["error"]}")
+                #     return {"status": message["error"]}
+                path = os.path.join(os.getcwd(), f"../models/user/{collection}/{token}{f'_{i}' if i > 1 else '' }.safetensors")
 
-                with open(path, "w") as f:
+                with open(path, "wb") as f:
                     f.write(message)
 
                 pipe.load_textual_inversion(path)

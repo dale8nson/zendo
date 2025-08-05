@@ -134,6 +134,25 @@ async def init_inpainter(model_path=None):
     inpainter.vae.enable_tiling(False)
     inpainter.to(device)
 
+
+async def get_pipe():
+    global pipe
+    if pipe is None:
+        await init_SDXL()
+    return pipe
+
+async def get_refiner():
+    global refiner
+    if pipe is None:
+        await init_refiner()
+    return refiner
+
+async def get_inpainter():
+    global inpainter
+    if inpainter is None:
+        await init_inpainter()
+    return inpainter
+
 async def init_upscaler():
     global upscaler
     upscaler = StableDiffusionUpscalePipeline.from_pretrained(os.path.join(os.getcwd(), "../models/stable-diffusion-x4-upscaler"), torch_dtype=torch.float16 if torch.cuda.is_available else torch.float32, variant = "fp16" if torch.cuda.is_available() else None,

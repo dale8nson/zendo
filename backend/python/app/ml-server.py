@@ -1,6 +1,6 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from .routes import upload, metadata, predict, images, image, prompts, caption, score, masks, generate, refine, inpaint, ws
+from .routes import upload, metadata, predict, images, image, prompts, caption, score, masks, generate, refine, inpaint, ws, example
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import os
@@ -27,7 +27,7 @@ app = FastAPI(lifespan=lifespan)
 init_db()
 
 app.add_middleware(
-    CORSMiddleware, allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"], allow_methods=["*"], allow_headers=["*"], allow_credentials=True
+    CORSMiddleware, allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "*"], allow_methods=["*"], allow_headers=["*"], allow_credentials=True
 )
 
 cwd = os.getcwd()
@@ -46,6 +46,7 @@ else:
 # app.include_router(score.router, prefix="/api")
 app.include_router(generate.router, prefix="/api")
 app.include_router(refine.router, prefix="/api")
+app.include_router(example.router, prefix="/api")
 # app.include_router(masks.router, prefix="/api")
 app.include_router(inpaint.router, prefix="/api")
 # app.include_router(prompts.router, prefix="/api", tags=["prompts"])

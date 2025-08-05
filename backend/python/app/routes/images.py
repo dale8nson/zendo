@@ -5,21 +5,20 @@ from pathlib import Path
 import base64
 from typing import Dict, List, Any
 import os
+from pydantic.main import BaseModel
+
+class ImagesRequest(BaseModel):
+    collection: str
 
 router = APIRouter()
 
-@router.get("/images")
-def get_images():
+@router.post("/images")
+def get_images(request: ImagesRequest):
     print("Running images.py:get_images")
-    print("Files in upload dir:", os.listdir(UPLOADS_DIR), flush=True)
+    print(f"request.collection: {request.collection}")
     conn = get_connection()
     cursor = conn.cursor()
-    cursor = cursor.execute("""
-        SELECT * FROM metadata WHERE timestamp = (
-            SELECT MAX(timestamp) FROM metadata as m2
-            WHERE m2.filename = metadata.filename
-        )
-        """)
+    cursor = cursor.execute(f"SELECT * FROM metadata WHERE timestamp = (SELECT MAX(timestamp) FROM metadata as m2 WHERE m2.filename = metadata.filename) AND metadata.collection = '{request.collection}'")
     conn.commit()
     metadata = cursor.fetchall()
     print(f"metadata: {metadata}")
