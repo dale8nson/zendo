@@ -619,6 +619,7 @@ async def train(
     print(f"Device: {torch.cuda.get_device_name(0)}")
     print(f"Allocated: {torch.cuda.memory_allocated() / 1024 ** 2:.2f} MiB")
     print(f"Reserved: {torch.cuda.memory_reserved() / 1024 ** 2:.2f} MiB")
+    print(f"accelerate available: {is_accelerate_available()}")
 
     x = torch.randn(1).cuda()
     print("Allocated:", torch.cuda.memory_allocated() / 1024 ** 2, "MiB")
@@ -653,7 +654,12 @@ async def train(
 
 
     vae = AutoencoderKL.from_pretrained(model_path, subfolder="vae", torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32).to(device)
-    unet = UNet2DConditionModel.from_pretrained(model_path, subfolder="unet", torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32).to(device)
+
+    vae.use_slicing = True
+    vae.use_tiling = True
+
+
+    unet = UNet2DConditionModel.from_pretrained(model_path, subfolder="unet", torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32, use_safetensors=True).to(device)
 
     initializer_token = re.search("(?<=<).+(?=>)", token)[0]
     placeholder_tokens = [token]
