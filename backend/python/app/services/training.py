@@ -803,7 +803,6 @@ async def train(
         optimizer=optimizer,
         num_warmup_steps=num_warmup_steps_for_scheduler,
         num_training_steps=num_training_steps,
-        num_cycles=lr_num_cycles,
     )
 
     text_encoder_1.train()
