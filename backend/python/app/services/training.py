@@ -1121,7 +1121,7 @@ async def train(
                                 placeholder_token_ids,
                                 placeholder_token,
                                 save_path=save_path,
-                                accelerator=accelerator
+                                accelerator=accelerator,
                                 safe_serialization=True,
                             )
                             weight_name = f"{token}_2.safetensors"
