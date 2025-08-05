@@ -998,6 +998,11 @@ async def train(
     text_encoder_1.get_input_embeddings().weight.requires_grad = True  # Just the embeddings
     text_encoder_2.get_input_embeddings().weight.requires_grad = True
 
+    vae.to(device)
+    unet.to(device)
+    text_encoder_1.to(device)
+    text_encoder_2.to(device)
+
     for epoch in range(first_epoch, num_train_epochs):
         text_encoder_1.train()
         text_encoder_2.train()
