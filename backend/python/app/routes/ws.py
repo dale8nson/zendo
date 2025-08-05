@@ -254,11 +254,11 @@ async def inversion_ws(ws: WebSocket):
                 collection = message["collection"]
                 token = message["token"]
 
-                dir_path = os.path.join(os.getcwd(), "../models/user/{collection}")
+                dir_path = os.path.join(os.getcwd(), f"../models/user/{collection}")
 
                 dir_list = os.listdir(dir_path)
 
-                tensor_files = [file for file in dir_list if file.endswith('.safetensors')]
+                tensor_files = [file for file in dir_list if file.startswith(token) and file.endswith('.safetensors')]
 
                 for file in tensor_files:
 
