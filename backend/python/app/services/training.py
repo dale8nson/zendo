@@ -1004,7 +1004,6 @@ async def train(
     unet.to(device)
     text_encoder_1.to(device)
     text_encoder_2.to(device)
-    optimizer.to(device)
 
     for epoch in range(first_epoch, num_train_epochs):
         text_encoder_1.train()
@@ -1033,20 +1032,20 @@ async def train(
 
                     # Add noise to the latents according to the noise magnitude at each timestep
                     # (this is the forward diffusion process)
-                    noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
+                    noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps).to(device)
 
                     # Get the text embedding for conditioning
                     encoder_hidden_states_1 = (
                         text_encoder_1(batch["input_ids_1"], output_hidden_states=True)
                         .hidden_states[-2]
                         .to(dtype=weight_dtype)
-                    )
+                    ).to(device)
 
                     print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
                     print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
 
-                    encoder_output_2 = text_encoder_2(batch["input_ids_2"], output_hidden_states=True)
-                    encoder_hidden_states_2 = encoder_output_2.hidden_states[-2].to(dtype=weight_dtype)
+                    encoder_output_2 = text_encoder_2(batch["input_ids_2"], output_hidden_states=True).to(device)
+                    encoder_hidden_states_2 = encoder_output_2.hidden_states[-2].to(dtype=weight_dtype).to(device)
 
                     print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
                     print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
@@ -1071,7 +1070,7 @@ async def train(
                     print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
 
                     added_cond_kwargs = {"text_embeds": encoder_output_2[0], "time_ids": add_time_ids}
-                    encoder_hidden_states = torch.cat([encoder_hidden_states_1, encoder_hidden_states_2], dim=-1)
+                    encoder_hidden_states = torch.cat([encoder_hidden_states_1, encoder_hidden_states_2], dim=-1).to(device)
 
                     # Predict the noise residual
                     model_pred = unet(
@@ -1104,9 +1103,9 @@ async def train(
                     print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
 
                     # Let's make sure we don't update any embedding weights besides the newly added token
-                    index_no_updates = torch.ones((len(tokenizer_1),), dtype=torch.bool)
+                    index_no_updates = torch.ones((len(tokenizer_1),), dtype=torch.bool).to(device)
                     index_no_updates[min(placeholder_token_ids) : max(placeholder_token_ids) + 1] = False
-                    index_no_updates_2 = torch.ones((len(tokenizer_2),), dtype=torch.bool)
+                    index_no_updates_2 = torch.ones((len(tokenizer_2),), dtype=torch.bool).to(device)
                     index_no_updates_2[min(placeholder_token_ids_2) : max(placeholder_token_ids_2) + 1] = False
 
                     with torch.no_grad():
