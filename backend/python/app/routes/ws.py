@@ -243,6 +243,8 @@ async def inversion_ws(ws: WebSocket):
     global manager
     await manager.connect(ws)
 
+
+
     try:
         async for message in ws.iter_json():
             print(f"message.keys(): {message.keys()}")
@@ -252,10 +254,17 @@ async def inversion_ws(ws: WebSocket):
                 collection = message["collection"]
                 token = message["token"]
 
-                path = os.path.join(os.getcwd(), f"../models/user/{collection}/{token}.safetensors")
+                dir_path = os.path.join(os.getcwd(), "../models/user/{collection}")
 
-                with open(path, "rb") as f:
-                    await ws.send_bytes(f.read())
+                dir_list = os.listdir(dir_path)
+
+                tensor_files = [file if file.endswith('.safetensors') for file in dir_list]
+
+                for file in tensor_files:
+
+                    with open(os.path.join(dir_path, file), "rb") as f:
+                        await ws.send_bytes(f.read())
+
             else:
                 raise Exception (f"Invalid message: {message}")
 
