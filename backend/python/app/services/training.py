@@ -900,7 +900,7 @@ async def train(
 
     num_train_epochs = math.ceil(max_train_steps / num_update_steps_per_epoch)
 
-    total_batch_size = train_batch_size * (accelerator.num_processes if torch.cuda.is_available() else 1 )* args.gradient_accumulation_steps
+    total_batch_size = train_batch_size * (accelerator.num_processes if torch.cuda.is_available() else 1 )* gradient_accumulation_steps
 
     print("***** Running training *****")
     print(f"  Num examples = {len(train_dataset)}")
