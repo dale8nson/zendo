@@ -258,7 +258,7 @@ async def inversion_ws(ws: WebSocket):
 
                 dir_list = os.listdir(dir_path)
 
-                tensor_files = [file if file.endswith('.safetensors') for file in dir_list]
+                tensor_files = [file for file in dir_list if file.endswith('.safetensors')]
 
                 for file in tensor_files:
 
