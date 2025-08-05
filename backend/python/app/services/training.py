@@ -597,11 +597,12 @@ async def train(
     train_batch_size=1,
     gradient_accumulation_steps=16,
     lr=1e-4,
+    lr_num_cycles=1,
     betas=(0.9, 0.999),
     eps=1e-08,
     weight_decay=0.0,
     num_epochs=1,
-    num_warmup_steps_for_scheduler=20,
+    lr_warmup_steps=20,
     validation_steps=100,
     batch_size=1,
     num_workers=0,
@@ -735,18 +736,20 @@ async def train(
     text_encoder_1.gradient_checkpointing_enable()
     text_encoder_2.gradient_checkpointing_enable()
 
-    text_encoder_1.to(device, dtype=weight_dtype)
-    text_encoder_2.to(device, dtype=weight_dtype)
+    # text_encoder_1.to(device, dtype=weight_dtype)
+    # text_encoder_2.to(device, dtype=weight_dtype)
 
     if is_xformers_available():
         import xformers
 
-        xformers_version = version.parse(xformers.__version__)
-        if xformers_version == version.parse("0.0.16"):
-            logger.warning(
+        xformers_version = xformers.__version__
+        if xformers_version == "0.0.16":
+            print(
                 "xFormers 0.0.16 cannot be used for training in some GPUs. If you observe problems during training, please update xFormers to at least 0.0.17. See https://huggingface.co/docs/diffusers/main/en/optimization/xformers for more details."
             )
         unet.enable_xformers_memory_efficient_attention()
+    else:
+        raise ValueError("xformers is not available. Make sure it is installed correctly")
 
     optimizer_class = torch.optim.AdamW
 
@@ -774,7 +777,6 @@ async def train(
         data_root=os.path.join(os.getcwd(), f"../models/user/{collection}/datasets/{token}"),
         tokenizer_1=tokenizer_1,
         tokenizer_2=tokenizer_2,
-        learnable_property="object",  # [object, style]
         size=1024,
         repeats=100,
         interpolation="bicubic",
@@ -788,21 +790,31 @@ async def train(
         train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers
     )
 
+    num_warmup_steps_for_scheduler = lr_warmup_steps * accelerator.num_processes if torch.cuda.is_available() else 1
+
+    num_training_steps_for_scheduler = max_train_steps * accelerator.num_processes if torch.cuda.is_available() else num_processes
+
     lr_scheduler = get_scheduler(
         "constant_with_warmup",
         optimizer=optimizer,
         num_warmup_steps=num_warmup_steps_for_scheduler,
-        num_training_steps=num_training_steps
+        num_training_steps=num_training_steps,
+        num_cycles=lr_num_cycles,
     )
 
     text_encoder_1.train()
     text_encoder_2.train()
 
     if torch.cuda.is_available():
-        lr_scheduler = accelerator.prepare(
+        text_encoder_1, text_encoder_2, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
             text_encoder_1, text_encoder_2, optimizer, train_dataloader, lr_scheduler
         )
 
+    weight_dtype = torch.float32
+    if accelerator.mixed_precision == "fp16":
+        weight_dtype = torch.float16
+    elif accelerator.mixed_precision == "bf16":
+        weight_dtype = torch.bfloat16
 
     unet.to(accelerator.device if (torch.cuda.is_available()) else device, dtype=weight_dtype)
     vae.to(accelerator.device if (torch.cuda.is_available()) else device, dtype=weight_dtype)
@@ -812,7 +824,7 @@ async def train(
 
     num_train_epochs = math.ceil(max_train_steps / num_update_steps_per_epoch)
 
-    total_batch_size = train_batch_size * gradient_accumulation_steps
+    total_batch_size = train_batch_size * (accelerator.num_processes if torch.cuda.is_available() else 1 )* args.gradient_accumulation_steps
 
     print("***** Running training *****")
     print(f"  Num examples = {len(train_dataset)}")
@@ -845,20 +857,24 @@ async def train(
         if torch.cuda.is_available():
             accelerator.load_state(os.path.join(output_dir, path))
             global_step = int(path.split("-")[1])
+
+            initial_global_step = global_step
+            first_epoch = global_step // num_update_steps_per_epoch
         else:
             checkpoint = torch.load(os.path.join(output_dir, path),map_location=device)
 
-        global_step = int(path.split("-")[1])
+            global_step = int(path.split("-")[1])
 
-        text_encoder_1.load_state_dict(checkpoint["model"])
-        optimizer = torch.optim.AdamW(text_encoder_1.parameters(), lr=lr).to(device)
-        optimizer.load_state_dict(checkpoint["optimizer"])
-        lr_scheduler.load_state_dict(checkpoint["scheduler"])
+            text_encoder_1.load_state_dict(checkpoint["model"])
+            optimizer = torch.optim.AdamW(text_encoder_1.parameters(), lr=lr).to(device)
+            optimizer.load_state_dict(checkpoint["optimizer"])
+            lr_scheduler.load_state_dict(checkpoint["scheduler"])
 
-        global_step = checkpoint.get("global_step", 0)
-        initial_global_step = global_step
+            global_step = checkpoint.get("global_step", 0)
+            initial_global_step = global_step
 
-        first_epoch = global_step // num_update_steps_per_epoch
+            first_epoch = global_step // num_update_steps_per_epoch
+
 
     progress_bar = tqdm(
         range(0, max_train_steps),
@@ -873,16 +889,16 @@ async def train(
         orig_embeds_params = text_encoder_1.get_input_embeddings().weight.data.clone().to(device)
         orig_embeds_params_2 = text_encoder_2.get_input_embeddings().weight.data.clone().to(device)
 
-    with torch.no_grad():
-        dummy_input = torch.tensor([placeholder_token_ids[0]], dtype=torch.long, device=device).to(device)
-        dummy_mask = torch.tensor([[1]], dtype=torch.long, device=device).to(device)
-        _ = text_encoder_1(input_ids=dummy_input, attention_mask=dummy_mask, output_hidden_states=True)
+    # with torch.no_grad():
+    #     dummy_input = torch.tensor([placeholder_token_ids[0]], dtype=torch.long, device=device).to(device)
+    #     dummy_mask = torch.tensor([[1]], dtype=torch.long, device=device).to(device)
+    #     _ = text_encoder_1(input_ids=dummy_input, attention_mask=dummy_mask, output_hidden_states=True)
 
-    for param in text_encoder_1.parameters():
-        param.requires_grad = False
+    # for param in text_encoder_1.parameters():
+    #     param.requires_grad = False
 
-    for param in text_encoder_2.parameters():
-        param.requires_grad = False
+    # for param in text_encoder_2.parameters():
+    #     param.requires_grad = False
 
     text_encoder_1.get_input_embeddings().weight.requires_grad = True  # Just the embeddings
     text_encoder_2.get_input_embeddings().weight.requires_grad = True
@@ -978,9 +994,9 @@ async def train(
                             save_progress(
                                 text_encoder_1,
                                 placeholder_token_ids,
+                                accelerator,
                                 placeholder_token,
                                 save_path,
-                                accelerator,
                                 safe_serialization=True,
                             )
                             weight_name = f"learned_embeds_2-steps-{global_step}.safetensors"
@@ -988,8 +1004,9 @@ async def train(
                             save_progress(
                                 text_encoder_2,
                                 placeholder_token_ids_2,
-                                save_path,
                                 accelerator,
+                                placeholder_token
+                                save_path,
                                 safe_serialization=True,
                             )
                     logs = {"loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0]}
@@ -1064,7 +1081,7 @@ async def train(
 
                 loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
 
-                loss.backward()
+                accelerator.backward(loss) if torch.cuda.is_avalable() else loss.backward()
                 optimizer.step()
                 lr_scheduler.step()
                 optimizer.zero_grad()
@@ -1075,12 +1092,51 @@ async def train(
                 index_no_updates_2[min(placeholder_token_ids_2) : max(placeholder_token_ids_2) + 1] = False
 
                 with torch.no_grad():
-                    text_encoder_1.get_input_embeddings().weight[index_no_updates] = (
-                        orig_embeds_params[index_no_updates]
-                    )
-                    text_encoder_2.get_input_embeddings().weight[index_no_updates_2] = (
-                        orig_embeds_params_2[index_no_updates_2]
-                    )
+                    if torch.cuda.is_available():
+                        accelerator.unwrap_model(text_encoder_1).get_input_embeddings().weight[index_no_updates] = (
+                            orig_embeds_params[index_no_updates]
+                        )
+                        accelerator.unwrap_model(text_encoder_2).get_input_embeddings().weight[index_no_updates_2] = (
+                            orig_embeds_params_2[index_no_updates_2]
+                        )
+                    else:
+                        text_encoder_1.get_input_embeddings().weight[index_no_updates] = (
+                            orig_embeds_params[index_no_updates]
+                        )
+                        text_encoder_2.get_input_embeddings().weight[index_no_updates_2] = (
+                            orig_embeds_params_2[index_no_updates_2]
+                        )
+
+
+                if torch.cuda.is_available():
+                    if accelerator.sync_gradients:
+                        images = []
+                        progress_bar.update(1)
+                        global_step += 1
+                        if global_step % args.save_steps == 0:
+                            weight_name = f"{token}.safetensors"
+                            save_path = os.path.join(output_dir, weight_name)
+                            save_progress(
+                                text_encoder_1,
+                                placeholder_token_ids,
+                                placeholder_token,
+                                save_path=save_path,
+                                accelerator=accelerator
+                                safe_serialization=True,
+                            )
+                            weight_name = f"{token}_2.safetensors"
+                            save_path = os.path.join(output_dir, weight_name)
+                            save_progress(
+                                text_encoder_2,
+                                placeholder_token_ids_2,
+                                placeholder_token,
+                                save_path=save_path,
+                                accelerator=accelerator,
+                                safe_serialization=True,
+                            )
+                    accelerator.wait_for_everyone()
+
+                    accelerator.end_training()
 
                 logs = {"loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0]}
                 progress_bar.set_postfix(**logs)
@@ -1090,24 +1146,7 @@ async def train(
                 if global_step >= max_train_steps:
                     break
 
-                weight_name = f"{token}.safetensors"
-                save_path = os.path.join(output_dir, weight_name)
-                save_progress(
-                    text_encoder_1,
-                    placeholder_token_ids,
-                    placeholder_token,
-                    save_path,
-                    safe_serialization=True,
-                )
-                weight_name = f"{token}_2.safetensors"
-                save_path = os.path.join(output_dir, weight_name)
-                save_progress(
-                    text_encoder_2,
-                    placeholder_token_ids_2,
-                    placeholder_token,
-                    save_path,
-                    safe_serialization=True,
-                )
+
 
         # pipe.load_textual_inversion(os.path.join(output_dir, token))
         if refiner is not None:
