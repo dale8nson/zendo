@@ -645,8 +645,9 @@ async def train(
         accelerator_project_config = ProjectConfiguration(project_dir=output_dir)
         accelerator = Accelerator(
             gradient_accumulation_steps=gradient_accumulation_steps,
-            mixed_precision="fp16" if (torch.cuda.is_available()) else "no",
+            mixed_precision="fp16",
             project_config=accelerator_project_config,
+            device_placement=False
         )
 
     tokenizer_1=CLIPTokenizer.from_pretrained(os.path.join(os.getcwd(), "../models/sdxl-base-1.0"), subfolder="tokenizer")
