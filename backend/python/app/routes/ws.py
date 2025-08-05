@@ -8,6 +8,7 @@ from typing import Dict, Any
 import websockets
 import asyncio
 from websockets.asyncio.client import connect
+import json
 
 import os
 import json
@@ -195,18 +196,26 @@ async def websocket_send(uri: str, message: str):
 @router.websocket("/load_inversion")
 async def load_inversion(ws: WebSocket):
     print("load_inversion")
+    global manager
+    await manager.connect(ws)
+
     async for message in ws.iter_json():
         await ws.send_json({"status": "started"})
 
         uri="ws://10.0.0.22:8002/ws/inversion"
 
         conn = await connect(uri)
-        await conn.send_json(message)
+        await conn.send(json.dumps(message))
 
         i = 1
         while True:
             try:
                 message = await conn.recv()
+                message = json.loads(message)
+                print(f"message.keys(): {message.keys()}")
+                if 'error' in message.keys():
+                    print(f"error: {message["error"]}")
+                    return {"status": message["error"]}
                 path = os.path.join(os.getcwd(), f"../models/user/{message["collection"]}/{message["token"]}{f"_{i}" if i > 1 else ""}.safetensors")
 
                 with open(path, "w") as f:
@@ -236,13 +245,19 @@ async def inversion_ws(ws: WebSocket):
 
     try:
         async for message in ws.iter_json():
-            collection = message["collection"]
-            token = message["token"]
+            print(f"message.keys(): {message.keys()}")
 
-            path = os.path.join(os.getcwd(), f"../models/user/{collection}/{token}.safetensors")
+            if "collection" in message and "token" in message:
 
-            with open(path, "rb") as f:
-                await ws.send_bytes(f.read())
+                collection = message["collection"]
+                token = message["token"]
+
+                path = os.path.join(os.getcwd(), f"../models/user/{collection}/{token}.safetensors")
+
+                with open(path, "rb") as f:
+                    await ws.send_bytes(f.read())
+            else:
+                raise Exception (f"Invalid message: {message}")
 
     except WebSocketDisconnect:
         manager.disconnect(ws)
