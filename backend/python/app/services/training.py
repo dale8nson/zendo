@@ -612,6 +612,8 @@ async def train(
     global refiner, inpainter
     device = torch.device("mps" if torch.backends.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu")
 
+    print(f"device: {device}")
+
     if refiner is not None:
         refiner.to(torch.device("cpu"))
     if inpainter is not None:
