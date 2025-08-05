@@ -652,8 +652,8 @@ async def train(
     text_encoder_2 = CLIPTextModelWithProjection.from_pretrained(model_path, subfolder="text_encoder_2")
 
 
-    vae = AutoencoderKL.from_pretrained(model_path, subfolder="vae", dtype=torch.float16 if torch.cuda.is_available() else torch.float32).to(device)
-    unet = UNet2DConditionModel.from_pretrained(model_path, subfolder="unet", dtype=torch.float16 if torch.cuda.is_available() else torch.float32).to(device)
+    vae = AutoencoderKL.from_pretrained(model_path, subfolder="vae", torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32).to(device)
+    unet = UNet2DConditionModel.from_pretrained(model_path, subfolder="unet", torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32).to(device)
 
     initializer_token = re.search("(?<=<).+(?=>)", token)[0]
     placeholder_tokens = [token]
