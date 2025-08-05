@@ -194,35 +194,35 @@ async def websocket_send(uri: str, message: str):
 
 @router.websocket("/load_inversion")
 async def load_inversion(ws: WebSocket):
-    await ws.send_json({"status": "started"})
+    print("load_inversion")
+    async for message in ws.iter_json():
+        await ws.send_json({"status": "started"})
 
-    uri="ws://10.0.0.22:8002/ws/inversion"
+        uri="ws://10.0.0.22:8002/ws/inversion"
 
-    # message=json.dumps({"collection": collection, "token": token })
+        conn = await connect(uri)
+        await conn.send_json(message)
 
-    conn = await connect(uri)
-    await conn.send_json(message)
+        i = 1
+        while True:
+            try:
+                message = await conn.recv()
+                path = os.path.join(os.getcwd(), f"../models/user/{message["collection"]}/{message["token"]}{f"_{i}" if i > 1 else ""}.safetensors")
 
-    i = 1
-    while True:
-        try:
-            message = await conn.recv()
-            path = os.path.join(os.getcwd(), f"../models/user/{message["collection"]}/{message["token"]}{f"_{i}" if i > 1 else ""}.safetensors")
+                with open(path, "w") as f:
+                    f.write(message)
 
-            with open(path, "w") as f:
-                f.write(message)
+                pipe.load_textual_inversion(path)
+                refiner.load_textual_inversion(path)
+                inpainter.load_textual_inversion(path)
 
-            pipe.load_textual_inversion(path)
-            refiner.load_textual_inversion(path)
-            inpainter.load_textual_inversion(path)
+                i += 1
 
-            i += 1
+            except websockets.ConnectionClosedError as e:
+                print(f"{str(e)}")
 
-        except websockets.ConnectionClosedError as e:
-            print(f"{str(e)}")
-
-        except websockets.ConnectionClosed:
-            break
+            except websockets.ConnectionClosed:
+                break
 
     return {"status": "OK"}
 
