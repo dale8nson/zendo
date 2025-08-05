@@ -847,7 +847,7 @@ async def train(
 
     train_dataloader = torch.utils.data.DataLoader(
         train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers
-    )
+    ).to(device)
 
     print(f"accelerator.num_processes: {accelerator.num_processes}")
 
@@ -998,11 +998,13 @@ async def train(
     text_encoder_1.get_input_embeddings().weight.requires_grad = True  # Just the embeddings
     text_encoder_2.get_input_embeddings().weight.requires_grad = True
 
+    print(f"accelerator.device: {accelerator.device}")
+
     vae.to(device)
     unet.to(device)
     text_encoder_1.to(device)
     text_encoder_2.to(device)
-    noise_scheduler.to(device)
+    optimizer.to(device)
 
     for epoch in range(first_epoch, num_train_epochs):
         text_encoder_1.train()
