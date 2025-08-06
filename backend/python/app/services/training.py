@@ -1006,7 +1006,7 @@ async def train(
     text_encoder_1.get_input_embeddings().weight.requires_grad = True  # Just the embeddings
     text_encoder_2.get_input_embeddings().weight.requires_grad = True
 
-    print(f"dir(text_encoder_1.text_model): {dir(text_encoder_1.text_model)}")
+    print(f"dir(text_encoder_1.text_model.config): {dir(text_encoder_1.text_model.config)}")
 
     print(f"accelerator.device: {accelerator.device}")
 
