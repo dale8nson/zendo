@@ -1178,16 +1178,18 @@ async def train(
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
 
+
             images = batch["pixel_values"].cpu()
-            images = images.squeeze(0)
-            image_pil = to_pil(images)
-            print(f"image_pil: {image_pil}")
-            image_resized = image_pil.resize((512, 512))
-            to_tensor = T.ToTensor()
-            image_tensor = to_tensor(image_resized)
-            print(f"image_tensor.size(): {image_tensor.size()}")
-            image_tensor = image_tensor.unsqueeze(0).to(device, dtype=torch.float16)
-            print(f"image_tensor.size(): {image_tensor.size()}")
+            images = preprocess(images).to(device)
+            # images = images.squeeze(0)
+            # image_pil = to_pil(images)
+            # print(f"image_pil: {image_pil}")
+            # image_resized = image_pil.resize((512, 512))
+            # to_tensor = T.ToTensor()
+            # image_tensor = to_tensor(image_resized)
+            # print(f"image_tensor.size(): {image_tensor.size()}")
+            # image_tensor = image_tensor.unsqueeze(0).to(device, dtype=torch.float16)
+            # print(f"image_tensor.size(): {image_tensor.size()}")
 
             if torch.cuda.is_available():
                 with accelerator.accumulate([text_encoder_1, text_encoder_2]):
