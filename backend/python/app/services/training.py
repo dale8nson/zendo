@@ -1031,6 +1031,8 @@ async def train(
 
             images = batch["pixel_values"].to(device, dtype=torch.float16)
 
+            print(f"images.size: {images.size}")
+
             if torch.cuda.is_available():
                 with accelerator.accumulate([text_encoder_1, text_encoder_2]):
                     # Convert images to latent space
