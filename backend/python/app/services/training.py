@@ -652,16 +652,18 @@ async def train(
             device_placement=False
         )
 
-    tokenizer_1=CLIPTokenizer.from_pretrained(os.path.join(os.getcwd(), "../models/sdxl-base-1.0"), subfolder="tokenizer", torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32)
+    tokenizer_1=CLIPTokenizer.from_pretrained(os.path.join(os.getcwd(), "../models/sdxl-base-1.0"), subfolder="tokenizer"" )
 
-    print(f"tokenizer_1.torch_dtype: {tokenizer_1.torch_dtype}")
+    tokenizer_1.config.torch_dtype = torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32
+
+    print(f"tokenizer_1.config.torch_dtype: {tokenizer_1.config.torch_dtype}")
 
     print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
     print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
 
-    tokenizer_2=CLIPTokenizer.from_pretrained(model_path, subfolder="tokenizer_2", torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32)
+    tokenizer_2=CLIPTokenizer.from_pretrained(model_path, subfolder="tokenizer_2")
 
-
+    tokenizer_2.config.torch_dtype = torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32
 
     print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
     print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
