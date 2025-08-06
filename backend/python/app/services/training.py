@@ -620,6 +620,11 @@ resume_from_checkpoint="latest"):
     # ------------------------------
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+    if torch.backends.mps.is_available():
+        torch.mps.empty_cache()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
     # Use FP16 for VAE, UNet; FP32 for text encoders
     weight_dtype = torch.float16
 
@@ -632,12 +637,33 @@ resume_from_checkpoint="latest"):
     # ------------------------------
     model_path = os.path.join(os.getcwd(), "../models/sdxl-base-1.0")
     # VAE and UNet in FP16
-    vae = AutoencoderKL.from_pretrained(model_path, subfolder="vae", torch_dtype=weight_dtype).to(device)
+    vae = AutoencoderKL.from_pretrained(model_path, subfolder="vae", torch_dtype=weight_dtype)
+    vae.eval()
+    vae.use_slicing = True
+    vae.use_tiling = True
+    vae = vae.to(device)
+
     unet = UNet2DConditionModel.from_pretrained(model_path, subfolder="unet", torch_dtype=weight_dtype).to(device)
+
+    unet.eval()
+    unet.enable_gradient_checkpointing()
 
     # Text encoders in FP32
     text_encoder_1 = CLIPTextModel.from_pretrained(model_path, subfolder="text_encoder").to(device)
-    text_encoder_2 = CLIPTextModel.from_pretrained(model_path, subfolder="text_encoder_2").to(device)
+    text_encoder_2 = CLIPTextModelWithProjection.from_pretrained(model_path, subfolder="text_encoder_2").to(device)
+
+    vae.requires_grad_(False)
+    unet.requires_grad_(False)
+
+    text_encoder_1.text_model.encoder.requires_grad_(False)
+    text_encoder_1.text_model.final_layer_norm.requires_grad_(False)
+    text_encoder_1.text_model.embeddings.position_embedding.requires_grad_(False)
+    text_encoder_2.text_model.encoder.requires_grad_(False)
+    text_encoder_2.text_model.final_layer_norm.requires_grad_(False)
+    text_encoder_2.text_model.embeddings.position_embedding.requires_grad_(False)
+
+    text_encoder_1.gradient_checkpointing_enable()
+    text_encoder_2.gradient_checkpointing_enable()
 
     # Optimizer only for text encoders (typical in textual inversion)
     params = list(text_encoder_1.parameters()) + list(text_encoder_2.parameters())

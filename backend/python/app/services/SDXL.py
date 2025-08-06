@@ -93,7 +93,7 @@ async def init_SDXL():
         pipe.enable_vae_slicing()
         pipe.enable_vae_tiling()
 
-        pipe.to(device)
+        pip = pipe.to(device)
 
 async def init_refiner(model_path = None):
     global refiner
@@ -110,7 +110,7 @@ async def init_refiner(model_path = None):
     refiner.config.output_type = "pil"
     refiner.safety_checker = None
     refiner.enable_attention_slicing()
-    refiner.to(device)
+    refiner = refiner.to(device)
 
     print(refiner.scheduler.config)
     print(refiner.config)
@@ -132,7 +132,7 @@ async def init_inpainter(model_path=None):
     inpainter.enable_attention_slicing()
     inpainter.enable_vae_slicing()
     inpainter.vae.enable_tiling(False)
-    inpainter.to(device)
+    inpainter = inpainter.to(device)
 
 
 async def get_pipe():
