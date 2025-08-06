@@ -652,7 +652,7 @@ async def train(
             device_placement=False
         )
 
-    tokenizer_1=CLIPTokenizer.from_pretrained(os.path.join(os.getcwd(), "../models/sdxl-base-1.0"), subfolder="tokenizer"" )
+    tokenizer_1=CLIPTokenizer.from_pretrained(os.path.join(os.getcwd(), "../models/sdxl-base-1.0"), subfolder="tokenizer")
 
     tokenizer_1.config.torch_dtype = torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32
 
