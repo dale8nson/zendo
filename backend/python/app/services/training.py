@@ -632,7 +632,7 @@ resume_from_checkpoint="latest"):
     # ------------------------------
     model_path = os.path.join(os.getcwd(), "../models/sdxl-base-1.0")
     # VAE and UNet in FP16
-    vae = AutoencoderKL.from_pretrained(model_path, subfolder="encoder", torch_dtype=weight_dtype).to(device)
+    vae = AutoencoderKL.from_pretrained(model_path, subfolder="vae", torch_dtype=weight_dtype).to(device)
     unet = UNet2DConditionModel.from_pretrained(model_path, subfolder="unet", torch_dtype=weight_dtype).to(device)
 
     # Text encoders in FP32
