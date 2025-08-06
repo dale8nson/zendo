@@ -1043,6 +1043,12 @@ async def train(
             print(f"image.size: {image.size}")
 
             image = image.resize((512, 512))
+            print(f"image: {image}")
+            print(f"image.size: {image.size}")
+            image = np.asarray(image)
+            print(f"image: {image}")
+            print(f"image.size: {image.shape}")
+            image = image.reshape((3, 512, 512))
             images = torch.tensor(np.asarray(image)).unsqueeze(0)
             images.to(device, dtype=torch.float16)
             print(f"images.size: {images.size()}")
