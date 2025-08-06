@@ -1038,7 +1038,7 @@ async def train(
             image = image.reshape((1024, 1024, 3))
             print(f"image: {image}")
             print(f"image.size: {image.shape}")
-            image = Image.fromarray(image.astype("uint8"))
+            image = Image.fromarray(image.astype("uint8")).convert("RGB")
             print(f"image: {image}")
             print(f"image.size: {image.size}")
 
@@ -1135,6 +1135,12 @@ async def train(
 
                     print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
                     print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
+                    for model_name, model in [("text_encoder_1", text_encoder_1),
+                                              ("text_encoder_2", text_encoder_2),
+                                              ("unet", unet)]:
+                        for name, param in model.named_parameters():
+                            if param.grad is not None and torch.isnan(param.grad).any():
+                                print(f"NaN in gradients of {name}")
 
                     optimizer.step()
                     lr_scheduler.step()
