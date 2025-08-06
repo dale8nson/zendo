@@ -1001,8 +1001,8 @@ async def train(
     print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
     print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
 
-    text_encoder_1 = text_encoder_1.to(dtype=torch.float32, device=device)
-    text_encoder_2 = text_encoder_2.to(dtype=torch.float32, device=device)
+    text_encoder_1 = text_encoder_1.to(dtype=torch.float16, device=device)
+    text_encoder_2 = text_encoder_2.to(dtype=torch.float16, device=device)
 
     if torch.cuda.is_available():
 
