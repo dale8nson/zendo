@@ -887,7 +887,7 @@ async def train(
         # text_encoder_2 = text_encoder_2.to(dtype=torch.float16, device=device)
 
         optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
-            text_encoder_1, text_encoder_2, optimizer, train_dataloader, lr_scheduler
+            optimizer, train_dataloader, lr_scheduler
         )
     print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
     print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
