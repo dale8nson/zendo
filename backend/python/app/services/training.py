@@ -1,6 +1,7 @@
 import torch
 import torch.nn.functional as F
 import torchvision.transforms as T
+from torchvision import transforms
 import safetensors
 from transformers import CLIPTokenizer, CLIPTextModelWithProjection, CLIPTextModel, get_scheduler
 from diffusers.utils.import_utils import is_xformers_available
@@ -737,6 +738,12 @@ async def train(
     global refiner, inpainter
     device = torch.device("mps" if torch.backends.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu")
 
+    preprocess = transforms.Compose([
+        transforms.Resize((512, 512)),
+        transforms.ToTensor(),
+        transforms.Normalize([0.5], [0.5]),
+    ])
+
     print(f"CUDA available: {torch.cuda.is_available()}")
     print(f"Device: {torch.cuda.get_device_name(0)}")
     print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
@@ -969,7 +976,7 @@ async def train(
         data_root=os.path.join(os.getcwd(), f"../models/user/{collection}/datasets/{token}"),
         tokenizer_1=tokenizer_1,
         tokenizer_2=tokenizer_2,
-        size=1024,
+        size=512,
         repeats=100,
         interpolation="bicubic",
         flip_p=0.5,
