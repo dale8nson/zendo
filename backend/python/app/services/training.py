@@ -1030,7 +1030,8 @@ async def train(
                 torch.cuda.empty_cache()
 
             images = batch["pixel_values"].cpu()
-
+            print(f"image: {image}")
+            print(f"image.size: {image.size()}")
             image = torch.Tensor.numpy(images.squeeze(0))
             image = image.reshape((1024, 1024, 3))
             image = Image.fromarray(image)
