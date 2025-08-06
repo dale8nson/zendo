@@ -654,8 +654,6 @@ async def train(
 
     tokenizer_1=CLIPTokenizer.from_pretrained(os.path.join(os.getcwd(), "../models/sdxl-base-1.0"), subfolder="tokenizer")
 
-    print(f"dir(tokenizer_1): {dir(tokenizer_1)}")
-    print(f"dir(tokenizer_1.super()): {dir(tokenizer_1.super())}")
     # tokenizer_1.config.torch_dtype = torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32
 
     # print(f"tokenizer_1.config.torch_dtype: {tokenizer_1.config.torch_dtype}")
@@ -1007,6 +1005,8 @@ async def train(
 
     text_encoder_1.get_input_embeddings().weight.requires_grad = True  # Just the embeddings
     text_encoder_2.get_input_embeddings().weight.requires_grad = True
+
+    print(f"dir(text_encoder_1.text_model): {dir(text_encoder_1.text_model)}")
 
     print(f"accelerator.device: {accelerator.device}")
 
