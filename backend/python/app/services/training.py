@@ -1029,7 +1029,7 @@ async def train(
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
 
-            images = batch["pixel_values"].to(device, dtype=torch.float16)
+            images = batch["pixel_values"].cpu()
 
             image = torch.Tensor.numpy(images.squeeze(0))
 
@@ -1039,7 +1039,7 @@ async def train(
 
             image = image.resize((512, 512))
             images = torch.tensor(np.asarray(image)).unsqueeze(0)
-
+            images.to(device, dtype=torch.float16)
             print(f"images.size: {images.size()}")
 
             if torch.cuda.is_available():
