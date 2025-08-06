@@ -1050,7 +1050,7 @@ async def train(
             print(f"image.size: {image.shape}")
             image = image.reshape((3, 512, 512))
             images = torch.tensor(np.asarray(image)).unsqueeze(0)
-            images.to(device, dtype=torch.float16)
+            images = images.to(device, dtype=torch.float16)
             print(f"images.size: {images.size()}")
 
             if torch.cuda.is_available():
