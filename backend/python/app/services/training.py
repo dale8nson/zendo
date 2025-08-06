@@ -1032,9 +1032,9 @@ async def train(
             images = batch["pixel_values"].cpu()
 
             image = torch.Tensor.numpy(images.squeeze(0))
-
+            image = image.reshape((1024, 1024, 3))
             image = Image.fromarray(image)
-            print(f"image: {imaghe}")
+            print(f"image: {image}")
             print(f"image.size: {image.size}")
 
             image = image.resize((512, 512))
