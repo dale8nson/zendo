@@ -1,4 +1,6 @@
 from diffusers import StableDiffusionXLPipeline, AutoPipelineForText2Image
 
-pipe = StableDiffusionXLPipeline.from_pretrained("stabilityai/stable-diffusion-xl-base-1.0")
+import torch
+
+pipe = StableDiffusionXLPipeline.from_pretrained("stabilityai/stable-diffusion-xl-base-1.0", torch_dtype=torch.float16 if torch.cuda.is_available(), variant="fp16" if torch.cuda.is_available() else None)
 pipe.save_pretrained("sdxl-base-1.0")
