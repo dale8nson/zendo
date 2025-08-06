@@ -1085,7 +1085,7 @@ async def train(
                     print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
                     print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
 
-                    encoder_output_2 = text_encoder_2(batch["input_ids_2"].to(device), output_hidden_states=True).to(device)
+                    encoder_output_2 = text_encoder_2(batch["input_ids_2"].to(device), output_hidden_states=True)
                     encoder_hidden_states_2 = encoder_output_2.hidden_states[-2].to(dtype=weight_dtype).to(device)
 
                     print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
