@@ -1035,10 +1035,13 @@ async def train(
 
             images = batch["pixel_values"].cpu()
             image_pil = to_pil(images)
+            print(f"image_pil: {image_pil}")
             image_resized = image_pil.resize((512, 512))
             to_tensor = T.ToTensor()
             image_tensor = to_tensor(image_resized)
+            print(f"image_tensor.size(): {image_tensor.size()}")
             image_tensor = image_tensor.unsqueeze(0).to(device, dtype=torch.float16)
+            print(f"image_tensor.size(): {image_tensor.size()}")
 
             # print(f"images: {images}")
             # print(f"images.size: {images.size()}")
