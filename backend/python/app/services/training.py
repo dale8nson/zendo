@@ -1180,6 +1180,7 @@ async def train(
 
 
             images = batch["pixel_values"].cpu()
+            print(f"images.size(): {images.size()}")
             # images = images.squeeze(0)
             # images = torch.Tensor.numpy(images)
             images = to_pil(images)
