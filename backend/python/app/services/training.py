@@ -1,5 +1,6 @@
 import torch
 import torch.nn.functional as F
+import torchvision.transforms as T
 import safetensors
 from transformers import CLIPTokenizer, CLIPTextModelWithProjection, CLIPTextModel, get_scheduler
 from diffusers.utils.import_utils import is_xformers_available
@@ -1013,6 +1014,9 @@ async def train(
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
 
+    to_pil = T.ToPILImage()
+
+
     for epoch in range(first_epoch, num_train_epochs):
         text_encoder_1.train()
         text_encoder_2.train()
@@ -1030,33 +1034,39 @@ async def train(
                 torch.cuda.empty_cache()
 
             images = batch["pixel_values"].cpu()
-            print(f"images: {images}")
-            print(f"images.size: {images.size()}")
-            image = (torch.Tensor.numpy(images.squeeze(0)) * 255) // 1
-            print(f"image: {image}")
-            print(f"image.shape: {image.shape}")
-            image = image.reshape((1024, 1024, 3))
-            print(f"image: {image}")
-            print(f"image.size: {image.shape}")
-            image = Image.fromarray(image.astype("uint8")).convert("RGB")
-            print(f"image: {image}")
-            print(f"image.size: {image.size}")
+            image_pil = to_pil(images)
+            image_resized = image_pil.resize((512, 512))
+            to_tensor = T.ToTensor()
+            image_tensor = to_tensor(image_resized)
+            image_tensor = image_tensor.unsqueeze(0).to(device, dtype=torch.float16)
 
-            image = image.resize((512, 512))
-            print(f"image: {image}")
-            print(f"image.size: {image.size}")
-            image = np.asarray(image)
-            print(f"image: {image}")
-            print(f"image.size: {image.shape}")
-            image = image.reshape((3, 512, 512))
-            images = torch.tensor(np.asarray(image)).unsqueeze(0)
-            images = images.to(device, dtype=torch.float16)
-            print(f"images.size: {images.size()}")
+            # print(f"images: {images}")
+            # print(f"images.size: {images.size()}")
+            # image = (torch.Tensor.numpy(images.squeeze(0)) * 255) // 1
+            # print(f"image: {image}")
+            # print(f"image.shape: {image.shape}")
+            # image = image.reshape((1024, 1024, 3))
+            # print(f"image: {image}")
+            # print(f"image.size: {image.shape}")
+            # image = Image.fromarray(image.astype("uint8")).convert("RGB")
+            # print(f"image: {image}")
+            # print(f"image.size: {image.size}")
+
+            # image = image.resize((512, 512))
+            # print(f"image: {image}")
+            # print(f"image.size: {image.size}")
+            # image = np.asarray(image)
+            # print(f"image: {image}")
+            # print(f"image.size: {image.shape}")
+            # image = image.reshape((3, 512, 512))
+            # images = torch.tensor(np.asarray(image)).unsqueeze(0)
+            # images = images.to(device, dtype=torch.float16)
+            # print(f"images.size: {images.size()}")
 
             if torch.cuda.is_available():
                 with accelerator.accumulate([text_encoder_1, text_encoder_2]):
                     # Convert images to latent space
-                    latents = vae.encode(images.to(device=device, dtype=weight_dtype)).latent_dist.sample().to(device)
+                    latents = vae.encode(image_tensor).latent_dist.sample().to(device)
 
                     print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
                     print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
