@@ -21,6 +21,7 @@ from accelerate.utils import ProjectConfiguration, set_seed
 from app.services.SDXL import pipe, refiner, inpainter
 from app.services.textual_inversion.textual_inversion_sdxl import TextualInversionDataset
 import inspect
+import gc
 
 from diffusers import (
     AutoencoderKL,
@@ -1007,6 +1008,10 @@ async def train(
     unet.to(device)
     text_encoder_1.to(device)
     text_encoder_2.to(device)
+
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
     for epoch in range(first_epoch, num_train_epochs):
         text_encoder_1.train()
