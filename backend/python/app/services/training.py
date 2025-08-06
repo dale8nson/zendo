@@ -1182,7 +1182,7 @@ async def train(
             images = batch["pixel_values"].cpu()
             images = images.squeeze(0)
             print(f"images.size(): {images.size()}")
-            images = torch.Tensor.numpy(images)
+            # images = torch.Tensor.numpy(images)
             print(f"images.shape: {images.shape}")
             images = to_pil(images)
             images = preprocess(images).to(device)
