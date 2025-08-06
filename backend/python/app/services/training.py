@@ -1034,6 +1034,7 @@ async def train(
                 torch.cuda.empty_cache()
 
             images = batch["pixel_values"].cpu()
+            images = images.squeeze(0)
             image_pil = to_pil(images)
             print(f"image_pil: {image_pil}")
             image_resized = image_pil.resize((512, 512))
