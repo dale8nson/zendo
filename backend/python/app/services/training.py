@@ -1180,7 +1180,7 @@ async def train(
 
 
             images = batch["pixel_values"].cpu()
-            images = images.squeeze(0)
+            # images = images.squeeze(0)
             images = to_pil(images)
             images = preprocess(images).to(device)
 
