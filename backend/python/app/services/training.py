@@ -675,10 +675,16 @@ async def train(
 
     text_encoder_1 = CLIPTextModel.from_pretrained(model_path, subfolder="text_encoder")
 
-    print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
-    print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
+    text_encoder_1.text_model.config.torch_dtype = torch.float16 if torch.cuda.is_available() else torch.float32
+
+    print(f"text_encoder_1.text_model.config.torch_dtype: {text_encoder_1.text_model.config.torch_dtype}")
+
+    # print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
+    # print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
 
     text_encoder_2 = CLIPTextModelWithProjection.from_pretrained(model_path, subfolder="text_encoder_2")
+
+    text_encoder_2.text_model.config.torch_dtype = torch.float16 if torch.cuda.is_available() else torch.float32
 
     print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
     print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
