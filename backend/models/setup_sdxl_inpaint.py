@@ -16,4 +16,4 @@ inpainter.config.requires_aesthetics_score = False
 if hasattr(inpainter, "register_to_config"):
     inpainter.register_to_config(requires_aesthetics_score=False)
 
-inpainter.save_pretrained("stable-diffusion-xl-inpainting-1.0")
+inpainter.save_pretrained("stable-diffusion-xl-inpainting-1.0", max_shard_size="5GB")

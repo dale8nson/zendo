@@ -145,6 +145,8 @@ async def init_inpainter(model_path=None):
 async def init_controlnet():
     global pipe, controlnet
 
+
+
     if pipe is None:
         await init_SDXL()
 
@@ -203,27 +205,31 @@ async def generate_latent(image: Image.Image, pipeline: DiffusionPipeline, times
 
 
 async def generate(prompt, iterations, guidance_scale, negative_prompt, prompt_2, negative_prompt_2, ipAdapterImage=None) -> dict:
+
+    global selected_image, selected_prompt, latent, prompt_embeds, controlnet, negative_prompt_embeds, inpainter, refiner
+    selected_prompt = prompt
+    # await generate_latent(prompt)
+    #
+    if inpainter is not None:
+        inpainter.to("cpu")
+        inpainter = None
+
+    if refiner is not None:
+        refiner.to("cpu")
+        refiner = None
+
     if torch.backends.mps.is_available():
         torch.mps.empty_cache()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
-    global selected_image, selected_prompt, latent, prompt_embeds, controlnet, negative_prompt_embeds, inpainter, refiner
-    selected_prompt = prompt
-    # await generate_latent(prompt)
+
     global pipe
     if pipe is None:
         await init_SDXL()
 
     if ipAdapterImage is not None:
-
         if controlnet is None:
             await init_controlnet()
-
-    if inpainter is not None:
-        del inpainter
-
-    if refiner is not None:
-        del refiner
 
         # controlnet = cast(controlnet, StableDiffusionXLControlNetPipeline)
     if ipAdapterImage is not None:
@@ -299,15 +305,16 @@ k = 0
 
 async def refine(prompt, image, strength, inference_steps, guidance_scale, negative_prompt, prompt_2, negative_prompt_2, callback_on_step_end=None):
 
-    global selected_image, selected_prompt, latent, pipe, refiner, device, test_filepath, inpainter
+    global selected_image, selected_prompt, latent, pipe, refiner, device, test_filepath
+    global inpainter
+
+    if inpainter:
+        inpainter = None
 
     if torch.backends.mps.is_available():
         torch.mps.empty_cache()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
-
-    if inpainter is not None:
-        del inpainter
 
     b64 = extract_base64_data(image)
     image_bytes = base64.b64decode(b64)
@@ -329,51 +336,51 @@ async def refine(prompt, image, strength, inference_steps, guidance_scale, negat
     image = image.convert("RGB")
     image = ImageOps.pad(image, (1024, 1024), color=(0, 0, 0))
 
-    denoising_end = 1.0 - strength
-    refiner.scheduler.set_timesteps(inference_steps)
-    t_index = int(denoising_end * inference_steps)
-    if t_index >= len(refiner.scheduler.timesteps):
-        t_index = len(refiner.scheduler.timesteps) - 1
+    # denoising_end = 1.0 - strength
+    # refiner.scheduler.set_timesteps(inference_steps)
+    # t_index = int(denoising_end * inference_steps)
+    # if t_index >= len(refiner.scheduler.timesteps):
+    #     t_index = len(refiner.scheduler.timesteps) - 1
 
-    timestep = refiner.scheduler.timesteps[t_index]
-    print(f"timestep: {timestep}")
-    latent = torch.tensor(np.asarray(image)).unsqueeze(0).to(device, dtype=torch.float32)
-    print(f"latent.size(): {latent.size()}")
-    latent = latent.movedim(3, 1)
+    # timestep = refiner.scheduler.timesteps[t_index]
+    # print(f"timestep: {timestep}")
+    # latent = torch.tensor(np.asarray(image)).unsqueeze(0).to(device, dtype=torch.float32)
+    # print(f"latent.size(): {latent.size()}")
+    # latent = latent.movedim(3, 1)
 
-    latent = refiner.vae.encode(latent).latent_dist.sample()
+    # latent = refiner.vae.encode(latent).latent_dist.sample()
 
-    latents_mean = latents_std = None
+    # latents_mean = latents_std = None
 
-    if hasattr(refiner.vae.config, "latents_mean") and refiner.vae.config.latents_mean is not None:
-        latents_mean = torch.tensor(refiner.vae.config.latents_mean).view(1, 4, 1, 1)
-    if hasattr(refiner.vae.config, "latents_std") and refiner.vae.config.latents_std is not None:
-        latents_std = torch.tensor(refiner.vae.config.latents_std).view(1, 4, 1, 1)
+    # if hasattr(refiner.vae.config, "latents_mean") and refiner.vae.config.latents_mean is not None:
+    #     latents_mean = torch.tensor(refiner.vae.config.latents_mean).view(1, 4, 1, 1)
+    # if hasattr(refiner.vae.config, "latents_std") and refiner.vae.config.latents_std is not None:
+    #     latents_std = torch.tensor(refiner.vae.config.latents_std).view(1, 4, 1, 1)
 
-    if torch.cuda.is_available or torch.backends.mps.is_available()():
-        if hasattr(refiner, "final_offload_hook") and refiner.final_offload_hook is not None:
-            refiner.text_encoder_2.to("cpu")
-            torch.cuda.empty_cache()
-    else:
-        # make sure the VAE is in float32 mode, as it overflows in float16
-        if refiner.vae.config.force_upcast:
-            latent = latent.float()
-            refiner.vae.to(dtype=torch.float32)
+    # if torch.cuda.is_available or torch.backends.mps.is_available()():
+    #     if hasattr(refiner, "final_offload_hook") and refiner.final_offload_hook is not None:
+    #         refiner.text_encoder_2.to("cpu")
+    #         torch.cuda.empty_cache()
+    # else:
+    #     # make sure the VAE is in float32 mode, as it overflows in float16
+    #     if refiner.vae.config.force_upcast:
+    #         latent = latent.float()
+    #         refiner.vae.to(dtype=torch.float32)
 
-    if latents_mean is not None and latents_std is not None:
-        latents_mean = latents_mean.to(device=device, dtype=dtype)
-        latents_std = latents_std.to(device=device, dtype=dtype)
-        latent = (latent - latents_mean) * refiner.vae.config.scaling_factor / latents_std
-    else:
-        latent = refiner.vae.config.scaling_factor * latent
+    # if latents_mean is not None and latents_std is not None:
+    #     latents_mean = latents_mean.to(device=device, dtype=dtype)
+    #     latents_std = latents_std.to(device=device, dtype=dtype)
+    #     latent = (latent - latents_mean) * refiner.vae.config.scaling_factor / latents_std
+    # else:
+    #     latent = refiner.vae.config.scaling_factor * latent
 
-    print(f"latent.size(): {latent.size()}")
+    # print(f"latent.size(): {latent.size()}")
 
-    noise = torch.randn_like(latent)
+    # noise = torch.randn_like(latent)
 
-    latent = refiner.scheduler.add_noise(latent, noise, torch.tensor([timestep]))
+    # latent = refiner.scheduler.add_noise(latent, noise, torch.tensor([timestep]))
 
-    print(f"type(latent): {type(latent)}")
+    # print(f"type(latent): {type(latent)}")
 
     print(f"image: {image}")
 
@@ -382,7 +389,7 @@ async def refine(prompt, image, strength, inference_steps, guidance_scale, negat
     output = cast(StableDiffusionXLImg2ImgPipeline, refiner)(
         prompt=prompt,
         image=image,
-        latents=latent,
+        # latents=latent,
         strength=strength,
         guidance_scale=guidance_scale,
         negative_prompt=negative_prompt,
@@ -392,7 +399,7 @@ async def refine(prompt, image, strength, inference_steps, guidance_scale, negat
         output_type="pil",
         original_size=image.size,
         target_size=(1024, 1024),
-        denoising_start=denoising_start,
+        denoising_start=0.0,
         denoising_end=1.0,
         num_images_per_prompt = 1,
         num_inference_steps = inference_steps,
@@ -431,25 +438,23 @@ async def refine(prompt, image, strength, inference_steps, guidance_scale, negat
     return {"image_data": image_base64}
 
 
-async def inpaint(image, prompt="", mask_data = [], strength=0.5, inference_steps=50, guidance_scale = 7.5, use_refiner=False, inpaint_refiner_ratio=0.85, inpaint_refiner_inference_steps=5,  inpaint_refiner_guidance_scale=7.5, negative_prompt=None, prompt_2=None, negative_prompt_2=None, refiner_prompt=None, refiner_negative_prompt=None, refiner_prompt_2=None, refiner_negative_prompt_2=None, callback_on_step_end=None):
+async def inpaint(image, prompt="", mask_data = [], strength=0.5, inference_steps=50, guidance_scale = 7.5, use_refiner=False, inpaint_refiner_ratio=0.85, inpaint_refiner_inference_steps=5,  inpaint_refiner_guidance_scale=7.5, negative_prompt=None, prompt_2=None, negative_prompt_2=None, refiner_prompt=None, refiner_negative_prompt=None, refiner_prompt_2=None, refiner_negative_prompt_2=None, new_layer=False, callback_on_step_end=None):
 
     global inpainter, inpaint_image_count, buffer, inpaint_mask_count, inpaint_alpha_mask_count, image_count, refiner, pipe
-    if inpainter is None:
-        await init_inpainter()
-
-    if refiner is None:
-        await init_refiner()
-
-    if inpainter is not None:
-        del inpainter
 
     if pipe is not None:
-        del pipe
+        pipe.to("cpu")
+        pipe = None
 
     if torch.backends.mps.is_available():
         torch.mps.empty_cache()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
+
+    if inpainter is None:
+        await init_inpainter()
+
+
 
     b64 = extract_base64_data(image)
     image_bytes = base64.b64decode(b64)
@@ -570,7 +575,18 @@ async def inpaint(image, prompt="", mask_data = [], strength=0.5, inference_step
 
     print(f"type(output): {type(output)}")
 
+    if torch.backends.mps.is_available():
+        torch.mps.empty_cache()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
     if use_refiner:
+
+        if refiner is None:
+            inpainter.to("cpu")
+            inpainter = None
+            await init_refiner()
+
         output = output.unsqueeze(0)
         output = cast(StableDiffusionXLImg2ImgPipeline, refiner)(
             prompt=prompt,

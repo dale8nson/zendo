@@ -16,4 +16,4 @@ refiner.config.requires_aesthetics_score = False
 if hasattr(refiner, "register_to_config"):
     refiner.register_to_config(requires_aesthetics_score=False)
 
-refiner.save_pretrained("sdxl-refiner-1.0")
+refiner.save_pretrained("sdxl-refiner-1.0", max_shard_size="5GB")
