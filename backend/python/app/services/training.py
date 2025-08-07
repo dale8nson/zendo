@@ -765,7 +765,7 @@ async def train(
         refiner = cast(StableDiffusionXLPipeline, refiner).to(torch.device("cpu"))
         refiner = None
     if inpainter is not None:
-        inpainter = cast(StableDiffusionXLInpaintPipeline inpainter).to(torch.device("cpu"))
+        inpainter = cast(StableDiffusionXLInpaintPipeline, inpainter).to(torch.device("cpu"))
         inpainter = None
 
     if torch.backends.mps.is_available():
