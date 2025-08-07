@@ -1211,6 +1211,7 @@ async def train(
             if torch.cuda.is_available():
                 with accelerator.accumulate([text_encoder_1, text_encoder_2]):
                     # Convert images to latent space
+                    images = images.unsqueeze(0)
                     latents = vae.encode(images).latent_dist.sample().to(device)
 
                     print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
