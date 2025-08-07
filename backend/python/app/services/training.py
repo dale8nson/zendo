@@ -741,6 +741,7 @@ async def train(
     save_steps=0,
     resume_from_checkpoint="latest"
 ):
+    global pip, refiner, inpainter
     device = torch.device("mps" if torch.backends.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu")
 
     # refiner = get_refiner()
