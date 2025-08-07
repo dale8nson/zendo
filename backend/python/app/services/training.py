@@ -751,14 +751,16 @@ async def train(
     print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
     print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
 
-    x = torch.randn(1).cuda()
+    x = torch.randn(1).to(device)
     print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
     print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
 
     if refiner is not None:
-        refiner.to(torch.device("cpu"))
+        refiner.to("cpu")
+        refiner = None
     if inpainter is not None:
-        inpainter.to(torch.device("cpu"))
+        inpainter.to("cpu")
+        inpainter = None
 
     if torch.backends.mps.is_available():
         torch.mps.empty_cache()
