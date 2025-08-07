@@ -7,13 +7,10 @@ import os
 from .services.db import init_db, UPLOADS_DIR
 from contextlib import asynccontextmanager
 from .services.clip_model import init_clip
-from .services.SDXL import init_SDXL
 from .services.SAM import init_SAM
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # await init_clip()
-    # await init_SDXL()
     await init_SAM()
 
     yield

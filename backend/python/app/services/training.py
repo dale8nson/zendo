@@ -20,7 +20,7 @@ from tqdm.auto import tqdm
 import re
 from accelerate import Accelerator
 from accelerate.utils import ProjectConfiguration, set_seed
-from app.services.SDXL import pipe, refiner, inpainter
+from app.services.SDXL import get_pipe, get_refiner, get_inpainter
 from app.services.textual_inversion.textual_inversion_sdxl import TextualInversionDataset
 import inspect
 import gc
@@ -735,8 +735,10 @@ async def train(
     save_steps=0,
     resume_from_checkpoint="latest"
 ):
-    global refiner, inpainter
     device = torch.device("mps" if torch.backends.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu")
+
+    refiner = get_refiner()
+    inpainter = get_inpainter()
 
     preprocess = transforms.Compose([
         transforms.Resize((512, 512)),
@@ -778,7 +780,7 @@ async def train(
             device_placement=False
         )
 
-    tokenizer_1=CLIPTokenizer.from_pretrained(os.path.join(os.getcwd(), "../models/sdxl-base-1.0"), subfolder="tokenizer")
+    tokenizer_1 = CLIPTokenizer.from_pretrained(os.path.join(os.getcwd(), "../models/sdxl-base-1.0"), subfolder="tokenizer")
 
     # tokenizer_1.config.torch_dtype = torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32
 

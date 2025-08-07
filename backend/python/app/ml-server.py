@@ -7,16 +7,17 @@ import os
 from .services.db import init_db, UPLOADS_DIR
 from contextlib import asynccontextmanager
 from .services.clip_model import init_clip
-from .services.SDXL import init_SDXL, init_refiner, init_inpainter, init_upscaler
+from .services.SDXL import init_SDXL, init_refiner, init_inpainter, init_controlnet
 from .services.SAM import init_SAM
 from app.services.connection_manager import ConnectionManager
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # await init_clip()
-    await init_SDXL()
-    await init_refiner()
-    await init_inpainter()
+    # await init_SDXL()
+    # await init_refiner()
+    # await init_inpainter()
+    # await init_controlnet()
     # await init_upscaler()
     # await init_SAM()
 
