@@ -4,9 +4,10 @@ import torchvision.transforms as T
 from torchvision import transforms
 import safetensors
 from transformers import CLIPTokenizer, CLIPTextModelWithProjection, CLIPTextModel, get_scheduler
+from diffusers import StableDiffusionXLPipeline, StableDiffusionXLInpaintPipeline, StableDiffusionXLImg2ImgPipeline
 from diffusers.utils.import_utils import is_xformers_available
 from pydantic.main import BaseModel
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, cast
 from PIL import Image, ImageEnhance, ImageChops, ImageOps
 import base64
 from io import BytesIO
@@ -60,6 +61,11 @@ class DatasetPostRequest(BaseModel):
     collection: str
     token: str
     caption: str
+
+
+pipe = None
+refiner = None
+inpainter = None
 
 def extract_base64_data(data_url: str) -> str:
     # Remove header if present
@@ -737,8 +743,8 @@ async def train(
 ):
     device = torch.device("mps" if torch.backends.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu")
 
-    refiner = get_refiner()
-    inpainter = get_inpainter()
+    # refiner = get_refiner()
+    # inpainter = get_inpainter()
 
     preprocess = transforms.Compose([
         transforms.Resize((512, 512)),
@@ -756,10 +762,10 @@ async def train(
     print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
 
     if refiner is not None:
-        refiner.to("cpu")
+        refiner = cast(StableDiffusionXLPipeline, refiner).to(torch.device("cpu"))
         refiner = None
     if inpainter is not None:
-        inpainter.to("cpu")
+        inpainter = cast(StableDiffusionXLInpaintPipeline inpainter).to(torch.device("cpu"))
         inpainter = None
 
     if torch.backends.mps.is_available():
