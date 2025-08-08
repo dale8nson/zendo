@@ -1193,7 +1193,7 @@ async def train(
                 torch.cuda.empty_cache()
 
 
-            images = batch["pixel_values"].cpu()
+            images = batch["pixel_values"]
             images = images.squeeze(0)
             print(f"images.size(): {images.size()}")
             # images = torch.Tensor.numpy(images)
