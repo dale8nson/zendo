@@ -825,7 +825,7 @@ async def train(
     print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
     print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
 
-    vae = AutoencoderKL.from_pretrained(model_path, subfolder="vae", torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32).to(device)
+    vae = AutoencoderKL.from_pretrained(model_path, subfolder="vae", torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32)
 
     print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
     print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
@@ -1133,12 +1133,12 @@ async def train(
 
 
     else:
-        orig_embeds_params = text_encoder_1.get_input_embeddings().weight.data.clone().to(device)
+        orig_embeds_params = text_encoder_1.get_input_embeddings().weight.data.clone()
 
         print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
         print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
 
-        orig_embeds_params_2 = text_encoder_2.get_input_embeddings().weight.data.clone().to(device)
+        orig_embeds_params_2 = text_encoder_2.get_input_embeddings().weight.data.clone()
 
         print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
         print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
@@ -1215,7 +1215,7 @@ async def train(
                 with accelerator.accumulate([text_encoder_1, text_encoder_2]):
                     # Convert images to latent space
                     images = images.unsqueeze(0)
-                    latents = vae.encode(images.to(dtype=torch.float16)).latent_dist.sample()
+                    latents = vae.encode(images).latent_dist.sample()
 
                     print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
                     print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
@@ -1242,7 +1242,7 @@ async def train(
                     print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
                     print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
 
-                    encoder_output_2 = text_encoder_2(batch["input_ids_2"].to(device), output_hidden_states=True)
+                    encoder_output_2 = text_encoder_2(batch["input_ids_2"], output_hidden_states=True)
                     encoder_hidden_states_2 = encoder_output_2.hidden_states[-2]
 
                     print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
@@ -1307,9 +1307,9 @@ async def train(
                     print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
 
                     # Let's make sure we don't update any embedding weights besides the newly added token
-                    index_no_updates = torch.ones((len(tokenizer_1),), dtype=torch.bool).to(device)
+                    index_no_updates = torch.ones((len(tokenizer_1),), dtype=torch.bool)
                     index_no_updates[min(placeholder_token_ids) : max(placeholder_token_ids) + 1] = False
-                    index_no_updates_2 = torch.ones((len(tokenizer_2),), dtype=torch.bool).to(device)
+                    index_no_updates_2 = torch.ones((len(tokenizer_2),), dtype=torch.bool)
                     index_no_updates_2[min(placeholder_token_ids_2) : max(placeholder_token_ids_2) + 1] = False
 
                     with torch.no_grad():
@@ -1353,7 +1353,7 @@ async def train(
                 accelerator.wait_for_everyone()
                 accelerator.end_training()
             else:
-                latents = vae.encode(batch["pixel_values"].to(device, dtype=weight_dtype)).latent_dist.sample().detach()
+                latents = vae.encode(batch["pixel_values"]).latent_dist.sample().detach()
                 latents = latents * vae.config.scaling_factor
 
                 # Sample noise that we'll add to the latents
@@ -1373,20 +1373,20 @@ async def train(
 
                 # Get the text embedding for conditioning
                 encoder_hidden_states_1 = (
-                    text_encoder_1(batch["input_ids_1"].to(device), output_hidden_states=True)
+                    text_encoder_1(batch["input_ids_1"], output_hidden_states=True)
                     .hidden_states[-2]
                 )
 
                 print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
                 print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
 
-                encoder_output_2 = text_encoder_2(batch["input_ids_2"].to(device), output_hidden_states=True)
+                encoder_output_2 = text_encoder_2(batch["input_ids_2"], output_hidden_states=True)
 
                 print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
                 print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
 
 
-                encoder_hidden_states_2 = encoder_output_2.hidden_states[-2].to(dtype=weight_dtype)
+                encoder_hidden_states_2 = encoder_output_2.hidden_states[-2]
 
                 print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
                 print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
