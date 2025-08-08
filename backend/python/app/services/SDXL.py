@@ -130,7 +130,6 @@ async def init_inpainter(model_path=None):
         os.path.join(os.getcwd(),model_path),
         torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
         variant = "fp16" if torch.cuda.is_available() else None,
-        # device_map="balanced",
         use_safetensors=True
     )
 
@@ -161,7 +160,6 @@ async def init_controlnet():
         pipe,
         controlnet=controlnet_model,
         torch_dtype=torch.float32,
-        use_safetensors=True
     )
     controlnet.safety_checker = None
 

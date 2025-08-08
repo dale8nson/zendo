@@ -963,6 +963,9 @@ async def train(
 
     optimizer_class = torch.optim.AdamW
 
+    text_encoder_1 = text_encoder_1.to(device, dtype=torch.float16 if torch.cuda.is_available() else torch.float32)
+    text_encoder_2 = text_encoder_2.to(device, dtype=torch.float16 if torch.cuda.is_available() else torch.float32)
+
     optimizer = optimizer_class([
         text_encoder_1.text_model.embeddings.token_embedding.weight,
         text_encoder_2.text_model.embeddings.token_embedding.weight,
