@@ -1028,14 +1028,14 @@ async def train(
         optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
             optimizer, train_dataloader, lr_scheduler
         )
-    print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
-    print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
+        print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
+        print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
 
-    weight_dtype = torch.float32
-    if accelerator.mixed_precision == "fp16":
-        weight_dtype = torch.float16
-    elif accelerator.mixed_precision == "bf16":
-        weight_dtype = torch.bfloat16
+        weight_dtype = torch.float32
+        if accelerator.mixed_precision == "fp16":
+            weight_dtype = torch.float16
+        elif accelerator.mixed_precision == "bf16":
+            weight_dtype = torch.bfloat16
 
     unet.to(accelerator.device if (torch.cuda.is_available()) else device, dtype=weight_dtype)
 
@@ -1101,7 +1101,7 @@ async def train(
             global_step = int(path.split("-")[1])
 
             text_encoder_1.load_state_dict(checkpoint["model"])
-            optimizer = torch.optim.AdamW(text_encoder_1.parameters(), lr=lr).to(device)
+            optimizer = torch.optim.AdamW(text_encoder_1.parameters(), lr=lr).to(device, dtype=torch.float32)
             optimizer.load_state_dict(checkpoint["optimizer"])
             lr_scheduler.load_state_dict(checkpoint["scheduler"])
 
