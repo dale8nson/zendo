@@ -1211,7 +1211,7 @@ async def train(
             if torch.cuda.is_available():
                 with accelerator.accumulate([text_encoder_1, text_encoder_2]):
                     # Convert images to latent space
-                    images = images.unsqueeze(0)
+                    images = images.unsqueeze(0).to(dtype=torch.float16 if torch.cuda.is_available() else torch.float32)
                     latents = vae.encode(images).latent_dist.sample().to(device)
 
                     print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
@@ -1233,7 +1233,6 @@ async def train(
                     # Get the text embedding for conditioning
                     encoder_hidden_states_1 = (
                         text_encoder_1(batch["input_ids_1"].to(device), output_hidden_states=True)
-
                         .hidden_states[-2]
                         .to(dtype=weight_dtype)
                     ).to(device)
