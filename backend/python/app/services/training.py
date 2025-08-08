@@ -1101,7 +1101,7 @@ async def train(
             global_step = int(path.split("-")[1])
 
             text_encoder_1.load_state_dict(checkpoint["model"])
-            optimizer = torch.optim.AdamW(text_encoder_1.parameters(), lr=lr).to(device, dtype=torch.float32)
+            optimizer = torch.optim.AdamW(text_encoder_1.parameters(), lr=lr).to(device, dtype=torch.float64)
             optimizer.load_state_dict(checkpoint["optimizer"])
             lr_scheduler.load_state_dict(checkpoint["scheduler"])
 
