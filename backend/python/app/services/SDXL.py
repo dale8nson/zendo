@@ -82,7 +82,9 @@ async def init_SDXL():
     global pipe, device, refiner, inpainter
     print("Device:", device)
     if pipe is None:
-        pipe = StableDiffusionXLPipeline.from_pretrained(os.path.join(os.getcwd(),"../models/sdxl-base-1.0"), torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32, use_safetensors=True)
+        pipe = StableDiffusionXLPipeline.from_pretrained(os.path.join(os.getcwd(),"../models/sdxl-base-1.0"), torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+           # device_map="balanced",
+           use_safetensors=True)
         pipe.safety_checker = None
 
         if torch.cuda.is_available():
@@ -104,6 +106,7 @@ async def init_refiner(model_path = None):
         model_path,
         torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
         use_safetensors=True,
+        # device_map="balanced",
         variant="fp16" if torch.cuda.is_available() else None,
     )
 
@@ -127,6 +130,7 @@ async def init_inpainter(model_path=None):
         os.path.join(os.getcwd(),model_path),
         torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
         variant = "fp16" if torch.cuda.is_available() else None,
+        # device_map="balanced",
         use_safetensors=True
     )
 
@@ -145,8 +149,6 @@ async def init_inpainter(model_path=None):
 async def init_controlnet():
     global pipe, controlnet
 
-
-
     if pipe is None:
         await init_SDXL()
 
@@ -154,11 +156,10 @@ async def init_controlnet():
         os.path.join(os.getcwd(), "../models/controlnet-canny-sdxl-1.0"),
         torch_dtype=torch.float32
     )
-    vae = pipe.vae
-    controlnet = StableDiffusionXLControlNetPipeline.from_pretrained(
-        os.path.join(os.getcwd(), "../models/sdxl-base-1.0"),
+
+    controlnet = StableDiffusionXLControlNetPipeline.from_pipe(
+        pipe,
         controlnet=controlnet_model,
-        vae=vae,
         torch_dtype=torch.float32,
         use_safetensors=True
     )
@@ -547,7 +548,7 @@ async def inpaint(image, prompt="", mask_data = [], strength=0.5, inference_step
     enhancer.enhance(0.5)
 
     composite_mask = composite_mask.copy()
-    composite_mask = composite_mask.filter(ImageFilter.GaussianBlur(3))
+    # composite_mask = composite_mask.filter(ImageFilter.GaussianBlur(3))
 
     composite_mask.save(os.path.join(os.getcwd(),f"{test_filepath}/inpaint-mask-final-input.png"))
     image.save(os.path.join(os.getcwd(),f"{test_filepath}/inpaint-image-final-input.png"))
@@ -568,7 +569,7 @@ async def inpaint(image, prompt="", mask_data = [], strength=0.5, inference_step
         prompt_2=prompt_2,
         negative_prompt_2=negative_prompt_2,
         original_size=image.size,
-        target_size=image.size,
+        target_size=(1024, 1024),
         output_type="latent" if use_refiner else "pil",
         denoising_end=inpaint_refiner_ratio if use_refiner else 1.0,
         callback_on_step_end=callback_on_step_end).images[0]
