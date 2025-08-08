@@ -966,14 +966,18 @@ async def train(
     text_encoder_1 = text_encoder_1.to(dtype=torch.float16 if torch.cuda.is_available() else torch.float32)
     text_encoder_2 = text_encoder_2.to(dtype=torch.float16 if torch.cuda.is_available() else torch.float32)
 
-    optimizer = optimizer_class([
-        text_encoder_1.text_model.embeddings.token_embedding.weight,
-        text_encoder_2.text_model.embeddings.token_embedding.weight,
-    ],
-    lr=lr,
-    betas=betas,
-    eps=eps,
-    weight_decay=weight_decay
+    # optimizer = optimizer_class([
+    #     text_encoder_1.text_model.embeddings.token_embedding.weight,
+    #     text_encoder_2.text_model.embeddings.token_embedding.weight,
+    # ],
+    # lr=lr,
+    # betas=betas,
+    # eps=eps,
+    # weight_decay=weight_decay
+    # )
+
+    optimizer = optimizer_class(
+        list(text_encoder_1.parameters()) + list(text_encoder_2.parameters()), lr=lr
     )
 
     placeholder_token = " ".join(tokenizer_1.convert_ids_to_tokens(placeholder_token_ids))
