@@ -1166,8 +1166,8 @@ async def train(
     vae.enable_slicing()
 
     # unet.to(device)
-    text_encoder_1.to(device)
-    text_encoder_2.to(device)
+    # text_encoder_1.to(device)
+    # text_encoder_2.to(device)
 
     gc.collect()
     if torch.cuda.is_available():
@@ -1199,7 +1199,7 @@ async def train(
             # images = torch.Tensor.numpy(images)
             print(f"images.shape: {images.shape}")
             images = to_pil(images)
-            images = preprocess(images).to(device)
+            images = preprocess(images)
 
 
             # print(f"image_pil: {image_pil}")
@@ -1237,14 +1237,13 @@ async def train(
                     encoder_hidden_states_1 = (
                         text_encoder_1(batch["input_ids_1"], output_hidden_states=True)
                         .hidden_states[-2]
-                        .to(dtype=weight_dtype)
                     )
 
                     print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
                     print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
 
                     encoder_output_2 = text_encoder_2(batch["input_ids_2"].to(device), output_hidden_states=True)
-                    encoder_hidden_states_2 = encoder_output_2.hidden_states[-2].to(dtype=weight_dtype)
+                    encoder_hidden_states_2 = encoder_output_2.hidden_states[-2]
 
                     print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
                     print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
