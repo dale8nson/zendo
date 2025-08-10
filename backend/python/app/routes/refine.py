@@ -46,7 +46,7 @@ async def refine_ws(ws: WebSocket):
         async for message in ws.iter_json():
             await ws.send_json({"status": "started"})
             print(f"message keys: {message.keys()}")
-            response = await refine(message["prompt"], message["image"], message["strength"], message["inference_steps"], message["guidance_scale"], message["negative_prompt"], message["prompt_2"], message["negative_prompt_2"], callback_on_step_end = callback_on_step_end)
+            response = await refine(message["prompt"], message["layers"], message["strength"], message["inference_steps"], message["guidance_scale"], message["negative_prompt"], message["prompt_2"], message["negative_prompt_2"], callback_on_step_end = callback_on_step_end)
             await ws.send_json(response)
 
     except WebSocketDisconnect:

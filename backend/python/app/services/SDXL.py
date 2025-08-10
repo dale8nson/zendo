@@ -302,7 +302,7 @@ def extract_base64_data(data_url: str) -> str:
 
 k = 0
 
-async def refine(prompt, image, strength, inference_steps, guidance_scale, negative_prompt, prompt_2, negative_prompt_2, callback_on_step_end=None):
+async def refine(prompt, layers, strength, inference_steps, guidance_scale, negative_prompt, prompt_2, negative_prompt_2, callback_on_step_end=None):
 
     global selected_image, selected_prompt, latent, pipe, refiner, device, test_filepath
     global inpainter
@@ -315,10 +315,37 @@ async def refine(prompt, image, strength, inference_steps, guidance_scale, negat
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
 
-    b64 = extract_base64_data(image)
-    image_bytes = base64.b64decode(b64)
 
-    image = Image.open(BytesIO(image_bytes)).convert("RGB")
+    image = Image.new("RGBA", (1024, 1024))
+    root_layer = [l if l["label"] == "root" else {} for l in layers][0]
+    root_layer_history_index = root_layer["currentLayerHistoryIndex"]
+    root_bbox = root_layer["history"][root_layer_history_index]["bbox"]
+    rx1, ry1, rx2, ry2 = root_bbox
+    root_layer_width = rx2 - rx1
+    root_layer_height = ry2 - ry1
+    scale_x = root_layer_width / 1024
+    scale_y = root_layer_height / 1024
+    scale = min(scale_x, scale_y)
+    margin_x = (1024 - root_layer_width) / 2
+    margin_y = (1024 - root_layer_height) / 2
+
+    for layer in layers:
+
+        history_index = layer["currentLayerHistoryIndex"]
+        history = layer["history"]
+        image_data = history[history_index]["imageData"]
+        bbox = history[history_index]["bbox"]
+        bbox = cast(tuple[int, int, int, int], tuple([int(n * scale) for n in [bbox[i] + margin_x if i % 2 == 0 else bbox[i] + margin_y for i in range(len(bbox))]]))
+
+        b64 = extract_base64_data(image_data)
+        image_bytes = base64.b64decode(b64)
+
+        layer_image = Image.open(BytesIO(image_bytes)).convert("RGBA")
+        layer_image = layer_image.resize((int(root_layer_width * scale), int(root_layer_height * scale)))
+        image.paste(layer_image, box=bbox)
+
+
+
 
     image.save(os.path.join(os.getcwd(), f"{test_filepath}/img2img_original.png"))
 

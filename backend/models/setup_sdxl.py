@@ -1,4 +1,5 @@
-from diffusers import StableDiffusionXLPipeline, AutoPipelineForText2Image
+from diffusers import StableDiffusionXLPipeline
+
 
 import torch
 
