@@ -11,9 +11,11 @@ interface ImageEditorState {
   selectedMaskData: MaskData[]
   selectedMasks: { id: string; imageData: string }[]
   collection: string
+  token: string
   maskBox: number[]
   scaledSelectionBox: number[]
   objectCaption: string
+  selectionBox: number[]
 }
 
 const initialState: ImageEditorState = {
@@ -26,10 +28,12 @@ const initialState: ImageEditorState = {
   masks: [],
   selectedMaskData: [],
   collection: 'default',
+  token: '',
   maskBox: [0, 0, 0, 0],
   scaledSelectionBox: [0, 0, 0, 0],
   objectCaption: '',
   selectedMasks: [],
+  selectionBox: [0, 0, 0, 0],
 }
 
 const imageEditorSlice = createSlice({
@@ -63,8 +67,14 @@ const imageEditorSlice = createSlice({
     setCollection(state, action) {
       state.collection = action.payload
     },
+    setToken(state, action) {
+      state.token = action.payload
+    },
     setMaskBox(state, action) {
       state.maskBox = action.payload
+    },
+    setSelectionBox(state, action) {
+      state.selectionBox = action.payload
     },
     setScaledSelectionBox(state, action) {
       state.scaledSelectionBox = action.payload
@@ -112,7 +122,9 @@ export const {
   setMaskIndex,
   setSelectedMaskData,
   setCollection,
+  setToken,
   setMaskBox,
+  setSelectionBox,
   setScaledSelectionBox,
   setObjectCaption,
   setSelectedMasks,

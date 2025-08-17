@@ -2,7 +2,6 @@ import type { Metadata } from 'next'
 import './globals.css'
 import { Providers } from './providers'
 import { Toaster } from 'sonner'
-import { controller } from '@/lib/utils'
 
 export const metadata: Metadata = {
   title: 'ZendoAI',
@@ -15,9 +14,8 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode
 }>) {
-  controller.abort()
   return (
-    <html lang="en" className="w-screen h-screen">
+    <html lang="en" className="fixed top-0 left-0 w-screen h-screen">
       <body className={'w-screen h-screen md:w-screen md:h-screen antialiased'}>
         <Providers>
           {children}

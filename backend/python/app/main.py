@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routes import upload, metadata, predict, images, image, prompts, caption, score, masks, generate, refine, inpaint, cropped_image_caption, dataset, ws
+from .routes import upload, metadata, images, image, caption, score, cropped_image_caption, tokenize, upscale, ws
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import os
@@ -39,7 +39,8 @@ app.include_router(images.router, prefix="/api")
 app.include_router(image.router, prefix="/api")
 app.include_router(caption.router, prefix="/api")
 app.include_router(score.router, prefix="/api")
-app.include_router(dataset.router, prefix="/api")
+app.include_router(tokenize.router, prefix="/api")
+app.include_router(upscale.router, prefix="/api")
 # app.include_router(generate.router, prefix="/api")
 # app.include_router(refine.router, prefix="/api")
 # app.include_router(masks.router, prefix="/api")

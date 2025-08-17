@@ -26,6 +26,7 @@ interface ControlPanelState {
   strict: boolean
   reverseMask: boolean
   progress: number
+  collection: string
 }
 
 const initialState: ControlPanelState = {
@@ -54,6 +55,7 @@ const initialState: ControlPanelState = {
   strict: false,
   reverseMask: false,
   progress: 0,
+  collection: 'default',
 }
 
 export const controlPanelSlice = createSlice({
@@ -133,6 +135,9 @@ export const controlPanelSlice = createSlice({
     toggleReverseMask: (state: ControlPanelState, action: PayloadAction<boolean>) => {
       state.reverseMask = action.payload
     },
+    setCollection(state, action) {
+      state.collection = action.payload
+    },
   },
 })
 
@@ -161,6 +166,7 @@ export const {
   toggleDisabled,
   toggleStrict,
   toggleReverseMask,
+  setCollection,
 } = controlPanelSlice.actions
 
 export default controlPanelSlice.reducer

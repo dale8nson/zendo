@@ -36,6 +36,12 @@ import {
   appendHistory,
   setCurrentHistoryIndex,
   setPreviewStatus,
+  newImage,
+  selectLayer,
+  setLayerOpacity,
+  setLayerVisible,
+  appendLayerHistory,
+  newLayer,
 } from '@/lib/features/preview/previewSlice'
 
 import { MaskTable } from '@/components/MaskTable'
@@ -46,41 +52,39 @@ const generate = async (
   guidance_scale: number,
   negative_prompt: string,
   prompt_2: string,
-  negative_prompt_2: string
+  negative_prompt_2: string,
+  ip_adapter_image: string | Layer[] | null,
+  use_face_id: boolean,
+  bbox: number[] | null,
+  remove_background: boolean
 ): Promise<string> => {
   console.log('getPreview called with prompt:', prompt)
+  const body = JSON.stringify({
+    prompt,
+    iterations,
+    guidance_scale,
+    negative_prompt,
+    prompt_2,
+    negative_prompt_2,
+    ip_adapter_image,
+    use_face_id,
+    bbox,
+    remove_background,
+  })
+
+  console.log(`body: ${body}`)
+
   const response = await fetch('http://localhost:8001/api/generate', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      prompt,
-      iterations,
-      guidance_scale,
-      negative_prompt,
-      prompt_2,
-      negative_prompt_2,
-    }),
-    // keepalive: true,
+    body,
     cache: 'no-cache',
   })
   const data = await response.json()
   return data.image
 }
-
-// const img2img = async (request: Img2ImgRequest) => {
-//   const response = await fetch('http://localhost:8001/api/refine', {
-//     method: 'POST',
-//     headers: {
-//       'Content-Type': 'application/json',
-//     },
-//     cache: 'no-cache',
-//     body: JSON.stringify(request),
-//   })
-//   const data = await response.json()
-//   return data.image_data
-// }
 
 const get_masks = async (request: MasksRequest) => {
   console.log(`request: ${JSON.stringify(request)}`)
@@ -98,6 +102,8 @@ const get_masks = async (request: MasksRequest) => {
 
 export function RightSideBar() {
   console.log('RightSideBar')
+
+  const layerHistory = useAppSelector((state) => state.preview.layerHistory)
 
   const generationIterations = useAppSelector((state) => state.controlPanel.generationIterations)
   const generationGuidanceScale = useAppSelector(
@@ -157,8 +163,20 @@ export function RightSideBar() {
   const maskData = useAppSelector((state) => state.preview.maskData)
   const previewCanvasData = useAppSelector((state) => state.preview.previewCanvasData)
   const previewStatus = useAppSelector((state) => state.preview.status)
+  const selectedImage = useAppSelector((state) => state.imageEditor.selectedImage)
+  const editorSelectionBox = useAppSelector((state) => state.imageEditor.selectionBox)
+  const editorScaledSelectionBox = useAppSelector((state) => state.imageEditor.scaledSelectionBox)
 
   const dispatch = useAppDispatch()
+
+  const [useIPAdapterImage, setUseIPAdapterImage] = useState(false)
+  const [useIPAdapterFaceID, setUseIPAdapterFaceID] = useState(false)
+  const [toNewLayer, setToNewLayer] = useState(false)
+  const [activeLayer, setActiveLayer] = useState(0)
+  const [reuseCurrentImage, setReuseCurrentImage] = useState(false)
+  const [generateRemoveBG, setGenerateRemoveBG] = useState(false)
+  const [img2imgRemoveBG, setImg2imgRemoveBG] = useState(false)
+  const [inpaintRemoveBG, setInpaintRemoveBG] = useState(false)
 
   const scratchPad = useRef(null)
 
@@ -166,54 +184,96 @@ export function RightSideBar() {
     console.log('Button clicked')
     if (!prompt) return
 
+    const [x, y, w, h] = editorScaledSelectionBox
+    ;(() => console.log(`editorScaledSelectionBox`, editorScaledSelectionBox))()
+    const bbox = [x, y, x + w, y + h]
+    let adapterImage: string | Layer[] | null = null
+    if (useIPAdapterImage) {
+      adapterImage = selectedImage?.image_data as string
+      if (reuseCurrentImage) {
+        adapterImage = layerHistory[currentHistoryIndex] as Layer[]
+      }
+    }
+
+    ;(() => console.log(`adapterImage`, adapterImage))()
+
+    dispatch(toggleDisabled(true))
     const b64 = await generate(
       generatePrompt,
       generationIterations,
       generationGuidanceScale,
       generateNegativePrompt,
       generatePrompt2,
-      generateNegativePrompt2
+      generateNegativePrompt2,
+      adapterImage,
+      useIPAdapterFaceID,
+      bbox,
+      generateRemoveBG
     )
-    console.log(`b64: ${b64.slice(0, 29)}`)
-    dispatch(appendHistory(b64))
-    dispatch(setCurrentHistoryIndex(history.length))
+
     dispatch(toggleDisabled(false))
+
+    dispatch(newImage({ bbox: [0, 0, 1024, 1024], imageData: b64 }))
+  }
+
+  const upscale = async () => {
+    const layers = layerHistory[currentHistoryIndex]
+    const root = layers.find((layer) => layer.label === 'root') as Layer
+    const index = root?.currentLayerHistoryIndex as number
+    // let bbox = root.history[index].bbox
+
+    const body = JSON.stringify({
+      layers: layerHistory[currentHistoryIndex],
+    })
+
+    const response = await fetch('http://localhost:8000/api/upscale', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body,
+      cache: 'no-cache',
+    })
+    const { bbox, image_data: imageData } = await response.json()
+    dispatch(newImage({ bbox, imageData }))
   }
 
   const img2imgButtonHandler = async () => {
     console.log('img2img button clicked')
-    if (!caption || !history[currentHistoryIndex]) return
+    if (!layerHistory[currentHistoryIndex]) return
     const oldStatus = previewStatus
     dispatch(
       setPreviewStatus({ Status: 'running img2img...', currentHistoryIndex: currentHistoryIndex })
     )
     const ws = new WebSocket('ws://localhost:8001/api/refine')
+    const layers = layerHistory[currentHistoryIndex]
     const request: Img2ImgRequest = {
       prompt: img2imgPrompt,
-      image: history[currentHistoryIndex] as string,
+      layers: layers,
       strength: img2imgStrength,
       inference_steps: img2imgInferenceSteps,
       guidance_scale: img2imgGuidanceScale,
       negative_prompt: img2imgNegativePrompt,
       prompt_2: img2imgPrompt2,
       negative_prompt_2: img2imgNegativePrompt2,
+      remove_background: img2imgRemoveBG,
     }
 
     ws.onerror = (event) => {
       console.error('WebSocket error', event)
-      ws.close()
       dispatch(toggleDisabled(false))
-      dispatch(setPreviewStatus(oldStatus))
+      ws.close()
+      // dispatch(setPreviewStatus(oldStatus))
     }
     ws.onclose = (event) => {
       console.log('WebSocket closed', event)
       dispatch(toggleDisabled(false))
-      dispatch(setPreviewStatus(oldStatus))
+      // dispatch(setPreviewStatus(oldStatus))
     }
     ws.onopen = (event) => {
       console.log('WebSocket connection opened')
       ws.send(JSON.stringify(request))
-
+      dispatch(toggleDisabled(true))
       dispatch(setProgress(0))
       ws.onmessage = (message) => {
         console.log(`message keys: `, Object.keys(message))
@@ -221,10 +281,8 @@ export function RightSideBar() {
         console.log(data)
         if ('image_data' in data) {
           console.log(`data keys: ${Object.keys(data)}`)
-          dispatch(appendHistory(data.image_data))
-          dispatch(setCurrentHistoryIndex(history.length))
-          dispatch(setPreviewStatus(oldStatus))
           dispatch(toggleDisabled(false))
+          dispatch(newImage({ bbox: [0, 0, 1024, 1024], imageData: data.image_data }))
           ws.close()
         } else if ('step' in data) {
           // Progress message!
@@ -237,7 +295,7 @@ export function RightSideBar() {
   }
 
   const inpaintWS = () => {
-    if (!history[currentHistoryIndex]) return
+    if (!layerHistory[currentHistoryIndex]) return
     const oldStatus = previewStatus
     dispatch(
       setPreviewStatus({ Status: 'running Inpaint...', currentHistoryIndex: currentHistoryIndex })
@@ -245,7 +303,7 @@ export function RightSideBar() {
     const ws = new WebSocket('ws://localhost:8001/api/inpaint')
     const masks = maskData.filter((mask) => mask.include || mask.exclude)
     const request: InpaintRequest = {
-      image: history[currentHistoryIndex] as string,
+      layers: layerHistory[currentHistoryIndex],
       prompt: inpaintPrompt,
       masks: masks,
       strength: inpaintStrength,
@@ -262,6 +320,8 @@ export function RightSideBar() {
       refiner_negative_prompt: img2imgNegativePrompt,
       refiner_prompt_2: img2imgPrompt2,
       refiner_negative_prompt_2: img2imgNegativePrompt2,
+      new_layer: toNewLayer,
+      remove_background: inpaintRemoveBG,
     }
 
     dispatch(setProgress(0))
@@ -279,14 +339,56 @@ export function RightSideBar() {
     ws.onopen = (event) => {
       console.log('WebSocket connection opened')
       ws.send(JSON.stringify(request))
+      dispatch(toggleDisabled(true))
       ws.onmessage = (message) => {
         console.log(`message keys: `, Object.keys(message))
         const data = JSON.parse(message.data)
         console.log(`message.data: ${message.data}`)
         console.log(data)
         if ('image_data' in data) {
-          dispatch(appendHistory(data.image_data))
-          dispatch(setCurrentHistoryIndex(history.length))
+          if (toNewLayer) {
+            const initial_bbox = masks[0].bbox
+            const bbox = masks.reduce((acc, mask) => {
+              const [ax1, ay1, ax2, ay2] = acc
+              const [mx1, my1, mx2, my2] = mask.bbox
+              const x1 = Math.min(ax1, mx1)
+              const y1 = Math.min(ay1, my1)
+              const x2 = Math.max(ax2, mx2)
+              const y2 = Math.max(ay2, my2)
+
+              return [x1, y1, x2, y2]
+            }, initial_bbox)
+            const activeLayer = layerHistory[currentHistoryIndex].find(
+              (layer) => layer.selected
+            ) as Layer
+
+            dispatch(newLayer({ bbox, imageData: data.image_data }))
+          } else {
+            dispatch(newImage({ bbox: [0, 0, 1024, 1024], imageData: data.image_data }))
+          }
+
+          let newMaskData = []
+          for (const data of maskData) {
+            let newData = { ...data }
+            let bbox = newData.bbox
+            const [x1, y1, x2, y2] = bbox
+            const [w, h] = [x2 - x1, y2 - y1]
+            const size = Math.max(w, h)
+            const [mx, my] = [Math.floor((size - w) / 2), Math.floor((size - h) / 2)]
+            // bbox = [x1 + mx, y1 + my, x2 + mx, y2 + my]
+            let scaleX = size / w
+            let scaleY = size / h
+            const scale = Math.min(scaleX, scaleY)
+
+            bbox = bbox.map((n) => n * scale) as [number, number, number, number]
+
+            newData.bbox = bbox
+
+            newMaskData.push(newData)
+          }
+
+          dispatch(setMaskData(newMaskData))
+
           dispatch(toggleDisabled(false))
           ws.close()
         } else if ('step' in data) {
@@ -313,6 +415,20 @@ export function RightSideBar() {
           collapsible="true"
           className="w-full h-full space-y-2 overflow-y-scroll"
         >
+          <AccordionItem value="image">
+            <AccordionTrigger position="left">Image</AccordionTrigger>
+            <AccordionContent className="flex flex-col gap-2">
+              <Button
+                onClick={() => {
+                  if (disabled) return
+                  upscale()
+                }}
+                // disabled={disabled || generatePrompt == ''}
+              >
+                Upscale
+              </Button>
+            </AccordionContent>
+          </AccordionItem>
           <AccordionItem value="item-1">
             <AccordionTrigger position="left">Generation</AccordionTrigger>
             <AccordionContent className="flex flex-col gap-2">
@@ -342,19 +458,51 @@ export function RightSideBar() {
               />
               <input
                 type="range"
-                min={0}
+                min={0.25}
                 max={100}
                 step={0.25}
                 value={generationGuidanceScale}
                 onChange={(e) => dispatch(setGenerationGuidanceScale(Number(e.target.value)))}
               />
+              <div className="flex items-center space-x-2">
+                <input
+                  id="useIPAdapterImage"
+                  type="checkbox"
+                  checked={useIPAdapterImage}
+                  onChange={(e) => setUseIPAdapterImage(e.target.checked)}
+                />
+                <label htmlFor="useIPAdapterImage">IP Adapter Image</label>
+                <input
+                  id="useIPAdapterFaceID"
+                  type="checkbox"
+                  checked={reuseCurrentImage}
+                  onChange={(e) => setReuseCurrentImage(e.target.checked)}
+                />
+                <label htmlFor="reuseCurrentImage">Reuse Current Image</label>
+                <input
+                  id="useIPAdapterFaceID"
+                  type="checkbox"
+                  checked={useIPAdapterFaceID}
+                  onChange={(e) => setUseIPAdapterFaceID(e.target.checked)}
+                />
+                <label htmlFor="useIPAdapterFaceID">IP Adapter FaceID</label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <input
+                  id="inpaintRemoveBG"
+                  type="checkbox"
+                  checked={generateRemoveBG}
+                  onChange={(e) => setGenerateRemoveBG(e.target.checked)}
+                />
+                <label htmlFor="generateRemoveBG">Remove Background</label>
+              </div>
               <Button
                 onClick={() => {
                   if (disabled) return
-                  dispatch(toggleDisabled(true))
+
                   generateButtonHandler()
                 }}
-                disabled={disabled || generatePrompt == ''}
+                // disabled={disabled || generatePrompt == ''}
               >
                 Generate
               </Button>
@@ -387,6 +535,14 @@ export function RightSideBar() {
                 onChange={(e) => dispatch(setImg2imgInferenceSteps(Number(e.target.value)))}
                 className="w-full bg-white text-black p-2 font-bold"
               />
+              <input
+                type="range"
+                min={1}
+                max={50}
+                step={1}
+                value={img2imgInferenceSteps}
+                onChange={(e) => dispatch(setImg2imgInferenceSteps(Number(e.target.value)))}
+              />
               <label htmlFor="img2imgRefinerGuidanceScale">Guidance Scale</label>
               <input
                 id="img2imgGuidanceScale"
@@ -403,13 +559,21 @@ export function RightSideBar() {
                 value={img2imgGuidanceScale}
                 onChange={(e) => dispatch(setImg2imgGuidanceScale(Number(e.target.value)))}
               />
+              <div className="flex items-center space-x-2">
+                <input
+                  id="img2imgRemoveBG"
+                  type="checkbox"
+                  checked={img2imgRemoveBG}
+                  onChange={(e) => setImg2imgRemoveBG(e.target.checked)}
+                />
+                <label htmlFor="img2imgRemoveBG">Remove Background</label>
+              </div>
               <Button
                 onClick={() => {
                   if (disabled) return
-                  dispatch(toggleDisabled(true))
                   img2imgButtonHandler()
                 }}
-                disabled={disabled || !history[currentHistoryIndex]}
+                disabled={disabled || !layerHistory[currentHistoryIndex]}
               >
                 Img2Img
               </Button>
@@ -530,20 +694,37 @@ export function RightSideBar() {
                 disabled={!inpaintUseRefiner}
                 className="w-full bg-white text-black p-2 font-bold"
               />
+              <div className="flex items-center space-x-2">
+                <input
+                  id="toNewLayer"
+                  type="checkbox"
+                  checked={toNewLayer}
+                  onChange={(e) => setToNewLayer(e.target.checked)}
+                />
+                <label htmlFor="toNewLayer">To New Layer</label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <input
+                  id="inpaintRemoveBG"
+                  type="checkbox"
+                  checked={inpaintRemoveBG}
+                  onChange={(e) => setInpaintRemoveBG(e.target.checked)}
+                />
+                <label htmlFor="inpaintRemoveBG">Remove Background</label>
+              </div>
               <Button
                 onClick={() => {
                   if (disabled) return
-                  dispatch(toggleDisabled(true))
                   inpaintWS()
                 }}
-                disabled={disabled || !maskData}
+                disabled={disabled || !maskData.length}
               >
                 Inpaint
               </Button>
             </AccordionContent>
           </AccordionItem>
         </Accordion>
-        {/*<LayerTable />*/}
+        <LayerTable />
         <textarea
           ref={scratchPad}
           className="w-full h-16 p-2 border border-gray-300 rounded-md"

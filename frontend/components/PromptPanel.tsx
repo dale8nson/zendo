@@ -49,7 +49,7 @@ export function PromptPanel() {
   useEffect(() => {
     dispatch(setGeneratePrompt(localStorage.getItem('generate_prompt') || ''))
     dispatch(setGenerateNegativePrompt(localStorage.getItem('generate_negative_prompt') || ''))
-    dispatch(setGeneratePrompt2(localStorage.getItem('generate_prompt2') || ''))
+    dispatch(setGeneratePrompt2(localStorage.getItem('generate_prompt_2') || ''))
     dispatch(setGenerateNegativePrompt2(localStorage.getItem('generate_negative_prompt_2') || ''))
     dispatch(setImg2imgPrompt(localStorage.getItem('img2img_prompt') || ''))
     dispatch(setImg2imgNegativePrompt(localStorage.getItem('img2img_negative_prompt') || ''))

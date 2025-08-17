@@ -9,10 +9,13 @@ import websockets
 import asyncio
 from websockets.asyncio.client import connect
 import json
-
+from PIL import Image
+import base64
+import uuid
 import os
 import json
 import re
+from io import BytesIO
 
 
 manager = ConnectionManager()
@@ -68,7 +71,7 @@ async def mask_ws(ws: WebSocket):
     try:
         async for message in ws.iter_json():
             await ws.send_json({"status": "started"})
-            response = await generate_mask(image=message["image"], bbox=message["bbox"])
+            response = await generate_mask(layer=message["layer"], bbox=message["bbox"])
 
             await ws.send_json(response)
 
@@ -98,32 +101,6 @@ async def masks_ws(ws: WebSocket):
         await ws.send_json({"error": str(e)})
         manager.disconnect(ws)
         raise e
-
-
-# @router.websocket("/img2img")
-# async def img2img_ws(ws: WebSocket):
-
-#     loop = asyncio.get_running_loop()
-#     callback_on_step_end = CallBack(ws, loop)
-
-#     global manager
-#     await manager.connect(ws)
-
-#     try:
-#         async for message in ws.iter_json():
-#             await ws.send_json({"status": "started"})
-
-#             response = await generate_masks(image_data=message["image"])
-
-#             await ws.send_json(response)
-
-    # except WebSocketDisconnect:
-    #     manager.disconnect(ws)
-    # except Exception as e:
-    #     await ws.send_json({"error": str(e)})
-    #     manager.disconnect(ws)
-    #     raise e
-
 
 @router.websocket("/img2img")
 async def img2img_ws(ws: WebSocket):
@@ -157,8 +134,56 @@ async def dataset_ws(ws: WebSocket):
         async for message in ws.iter_json():
             await ws.send_json({"status": "started"})
             print(f"message keys: {message.keys()}")
-            response = await create_set(message["image_data"], message["masks"], message["collection"], message["token"], message["caption"], message["object_caption"], message["bbox"])
-            await ws.send_json(response)
+            bytes = base64.b64decode(message['image_data'])
+            image = Image.open(BytesIO(bytes)).convert("RGBA")
+            folder = os.path.join(os.getcwd(), f'../models/user/{message["collection"]}/datasets/{message["token"]}')
+
+            os.makedirs(folder, exist_ok=True)
+
+            filename = f'{uuid.uuid4()}.png'
+
+            image.save(os.path.join(folder, filename))
+
+            json_path = os.path.join(os.getcwd(), f"../models/user/{message['collection']}/captions.json")
+
+            entry =  {
+                "token": message['token'],
+                "bbox": message['bbox'],
+                "caption": message['caption']
+            }
+
+            if not os.path.exists(json_path):
+               with open(json_path, mode="w") as f:
+                   f.write(json.dumps({filename: entry}))
+            else:
+               with open(json_path, mode="r+") as f:
+                   d = json.load(f)
+                   # d = d.strip().replace('\n', '')
+                   # d = json.loads(d)
+                   print(f"d: {d}")
+                   d[filename] = entry
+                   f.seek(0)
+                   f.truncate()
+                   f.write(json.dumps(d))
+
+            clips_path = os.path.join(os.getcwd(), f'../models/user/{message["collection"]}/clips.json')
+            if not os.path.exists(clips_path):
+                with open(clips_path, mode='w') as c:
+                    caption = entry['caption']
+                    c.write(json.dumps([caption]))
+            else:
+                with open(clips_path, mode="r+") as c:
+                    d = set(json.load(c))
+                    # d = d.strip().replace('\n', '')
+                    # d = set(json.loads(d))
+                    print(f'd: {d}')
+                    caption = entry['caption']
+                    d.add(caption)
+                    c.seek(0)
+                    c.truncate()
+                    c.write(json.dumps(list(d)))
+            await ws.send_json({"status": "completed"})
+
 
     except WebSocketDisconnect:
         manager.disconnect(ws)
@@ -175,7 +200,7 @@ async def train_ws(ws: WebSocket):
     try:
         async for message in ws.iter_json():
             await ws.send_json({"status": "started"})
-            response = await train(message["collection"], message["token"])
+            response = await train(message["collection"], message["token"], message["image_data"], message["bbox"], message["prompt"],message["initializer_token"], max_train_steps=message["max_train_steps"], num_training_steps=message["num_training_steps"], repeats=message["repeats"], lr=message["lr"])
 
             await ws.send_json(response)
 

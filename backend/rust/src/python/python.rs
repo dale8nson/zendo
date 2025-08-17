@@ -47,6 +47,19 @@ pub fn transform_image_py(py: Python<'_>, path: &str, scale: f32) -> PyResult<Py
     Ok(PyBytes::new(py, &raw).into())
 }
 
+#[pyfunction(name = "compare_merge")]
+pub fn compare_merge_py(
+    py: Python<'_>,
+    arr1: PyArray1,
+    arr2: PyArray1,
+    comparison: &str,
+) -> PyResult<PyObject> {
+    let res = compare_merge(arr1, arr2, comparison)
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+
+    Ok(PyBytes::new(py, &res).into())
+}
+
 #[pyclass]
 pub struct PyClipModel {
     model: ClipModel,

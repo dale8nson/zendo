@@ -7,6 +7,11 @@ use image::{
     DynamicImage, GenericImageView, ImageBuffer, ImageFormat, ImageReader, RgbImage,
 };
 
+use numpy::{
+    array::PyArray1, IntoPyArray, IxDyn, PyArray, PyArrayDyn, PyArrayMethods, PyReadonlyArrayDyn,
+    PyUntypedArrayMethods,
+};
+
 use std::io::Cursor;
 use std::path::Path;
 
@@ -76,4 +81,57 @@ pub fn transform_image(path: &str, scale: f32) -> Result<DynamicImage, Box<dyn s
         .ok_or("Failed to create image buffer")?;
 
     Ok(DynamicImage::ImageRgb8(buffer))
+}
+
+pub fn compare_merge<'a>(
+    arr1: &'a PyArray1,
+    arr2: &'a PyArray1,
+    comparison: &str,
+) -> Result<Vec<u8>> {
+    if arr1.len() != arr2.len() {
+        return Err("Array lengths must match");
+    }
+    let mut merged_arr: PyArray1 = Vec::<u8>::with_capacity(arr1.len());
+    for (a, b) in (arr1.iter(), arr2.iter()) {
+        let res: str = match (comparison) {
+            "==" => {
+                if a == b {
+                    b
+                } else {
+                    a
+                }
+            }
+            "!=" => {
+                if a != b {
+                    b
+                } else {
+                    a
+                }
+            }
+            "<" => {
+                if a < b {
+                    b
+                } else {
+                    a
+                }
+            }
+            ">" => {
+                if a > b {
+                    b
+                } else {
+                    a
+                }
+            }
+            "<=" => {
+                if a <= b {
+                    b
+                } else {
+                    a
+                }
+            }
+            ">=" => a >= b,
+        };
+        merged_arr.push(res);
+    }
+    merged_arr
 }

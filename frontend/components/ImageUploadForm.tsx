@@ -1,11 +1,17 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { cn } from '@/lib/utils'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { setCollection } from '@/lib/features/control-panel/controlPanelSlice'
+import { useAppSelector, useAppDispatch } from '@/lib/hooks'
 
 export const ImageUploadForm = ({ onUpload }: { onUpload?: () => void }) => {
+  const collection = useAppSelector((state) => state.controlPanel.collection)
+
+  const dispatch = useAppDispatch()
+
   const queryClient = useQueryClient()
 
   const uploadMutation = useMutation({
@@ -21,10 +27,12 @@ export const ImageUploadForm = ({ onUpload }: { onUpload?: () => void }) => {
   })
 
   const [image, setImage] = useState<File | null>(null)
-  const [collection, setCollection] = useState('')
+
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [uploading, setUploading] = useState(false)
+
+  const debounce = useRef(false)
 
   const handleDrop = (event: React.DragEvent<HTMLLabelElement>) => {
     event.preventDefault()
@@ -117,7 +125,11 @@ export const ImageUploadForm = ({ onUpload }: { onUpload?: () => void }) => {
         placeholder="default"
         defaultValue="default"
         className="w-full p-2 border rounded-md"
-        onChange={(e) => setCollection(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key == 'Enter') {
+            dispatch(setCollection(e.target.value))
+          }
+        }}
       />
       <button
         type="submit"

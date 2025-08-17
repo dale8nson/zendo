@@ -47,7 +47,7 @@ async def inpaint_ws(ws: WebSocket):
         async for message in ws.iter_json():
             await ws.send_json({"status": "started"})
             print(f"message keys: {message.keys()}")
-            response = await inpaint(message["image"], message["prompt"], message["masks"], message["strength"], message["inference_steps"], message["guidance_scale"], message["use_refiner"], message["inpaint_refiner_ratio"], message["inpaint_refiner_inference_steps"], message["inpaint_refiner_guidance_scale"], message["negative_prompt"], message["prompt_2"], message["negative_prompt_2"], message["refiner_prompt"], message["refiner_negative_prompt"], message["refiner_prompt_2"], message["refiner_negative_prompt_2"], message["new_layer"], callback_on_step_end)
+            response = await inpaint(message["layers"], message["prompt"], message["masks"], message["strength"], message["inference_steps"], message["guidance_scale"], message["use_refiner"], message["inpaint_refiner_ratio"], message["inpaint_refiner_inference_steps"], message["inpaint_refiner_guidance_scale"], message["negative_prompt"], message["prompt_2"], message["negative_prompt_2"], message["refiner_prompt"], message["refiner_negative_prompt"], message["refiner_prompt_2"], message["refiner_negative_prompt_2"], message["new_layer"], message["remove_background"], callback_on_step_end)
             await ws.send_json(response)
 
     except WebSocketDisconnect:

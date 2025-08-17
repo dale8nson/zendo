@@ -8,12 +8,15 @@ router = APIRouter()
 
 @router.post("/caption")
 async def create_caption(data: PredictRequest):
-
+    print("/caption")
     image_path = os.path.join(UPLOAD_DIR, data.filename)
 
     if not os.path.exists(image_path):
         raise HTTPException(status_code=404, detail="Image not found.")
 
-    image = Image.open(image_path)
 
-    return caption(image)
+
+    image = Image.open(image_path).convert("RGB")
+    image.load()
+
+    return await caption(image)

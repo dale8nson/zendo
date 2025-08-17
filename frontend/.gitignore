@@ -43,3 +43,4 @@ next-env.d.ts
 
 .github/
 sdxl-base-1.0-auto/
+controlnet-canny-sdxl-1.0/

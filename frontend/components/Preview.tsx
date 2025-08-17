@@ -10,7 +10,6 @@ import {
 } from 'react'
 import { useAppSelector, useAppDispatch } from '@/lib/hooks'
 import { useQuery } from '@tanstack/react-query'
-import { controller } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import {
@@ -25,6 +24,7 @@ import { ToolPalette } from './ToolPalette'
 import {
   setCurrentHistoryIndex,
   setPreviewCanvasData,
+  setPreviewCanvasSize,
   setShouldDrawCanvas,
   appendHistory,
   setPreviewStatus,
@@ -37,6 +37,15 @@ import {
   nextMask,
   includeMask,
   excludeMask,
+  selectLayer,
+  setLayerOpacity,
+  setLayerVisible,
+  appendLayerHistory,
+  newImage,
+  setLayerHistoryIndex,
+  newEmptyLayer,
+  updateLayer,
+  previousMask,
 } from '@/lib/features/preview/previewSlice'
 import { toggleDisabled } from '@/lib/features/control-panel/controlPanelSlice'
 import { PromptPanel } from '@/components/PromptPanel'
@@ -67,12 +76,10 @@ export function Preview() {
   const layers = useAppSelector((state) => state.layerTable.layers)
   const [mask, setMask] = useState<HTMLImageElement | null>(null)
   const scaledSelectionBox = useAppSelector((state) => state.preview.scaledSelectionBox)
-
-  const pointerDownRef = useRef<boolean>(false)
-  const selectionBox = useRef([0, 0, 0, 0])
-
-  const pointerCanvasCoords = useRef<number[]>([])
-  const debounce = useRef(false)
+  const layerHistory = useAppSelector((state) => state.preview.layerHistory)
+  const disabled = useAppSelector((state) => state.controlPanel.disabled)
+  const selectedLayer = useAppSelector((state) => state.preview.selectedLayer)
+  const rootBbox = useAppSelector((state) => state.preview.rootBbox)
 
   const dispatch = useAppDispatch()
 
@@ -82,29 +89,38 @@ export function Preview() {
   const [contextMenuState, setContextMenuState] = useState<'open' | 'closed'>('closed')
   const [maskVisible, setMaskVisible] = useState(false)
   const [selectionBoxVisible, setSelectionBoxVisible] = useState(false)
+  const [layerImages, setLayerImages] = useState<HTMLImageElement[][]>([])
 
-  const drawCurrentImage = () => {
-    if (!canvasRef.current) return
+  const fetchingMasks = useRef(false)
+  const pointerDownRef = useRef<boolean>(false)
+  const selectionBox = useRef([0, 0, 0, 0])
+  const pointerCanvasCoords = useRef<number[]>([0, 0])
+  const debounce = useRef(false)
+
+  const drawLayers = async () => {
+    if (!canvasRef.current || !layerHistory.length) return
     const canv = canvasRef.current as HTMLCanvasElement
     const ctx = canv.getContext('2d')
     if (!ctx) return
+    ctx.clearRect(0, 0, canv.width, canv.height)
 
-    if (currentImage) {
-      ctx.clearRect(0, 0, canv.width, canv.height)
-      const scaleX = canv.width / currentImage.width
-      const scaleY = canv.height / currentImage.height
+    for (const index in layerImages[currentHistoryIndex]) {
+      const image = layerImages[currentHistoryIndex][index]
+      const layer = layerHistory[currentHistoryIndex][index]
+
+      if (!layer.visible) continue
+      const size = Math.min(canv.width, canv.height)
+      const scaleX = size / image.width
+      const scaleY = size / image.height
       const scale = Math.min(scaleX, scaleY)
-      ctx.drawImage(
-        currentImage,
-        0,
-        0,
-        currentImage.width,
-        currentImage.height,
-        canv.width / 2 - (currentImage.width / 2) * scale,
-        canv.height / 2 - (currentImage.height / 2) * scale,
-        currentImage.width * scale,
-        currentImage.height * scale
-      )
+
+      ctx.globalAlpha = layer.opacity
+
+      const [x1, y1, x2, y2] = layer.history[layer.currentLayerHistoryIndex].bbox as Array<number>
+
+      let [x, y, w, h] = [x1, y1, x2 - x1, y2 - y1].map((n) => n * scale)
+
+      ctx.drawImage(image, 0, 0, image.width, image.height, x, y, w, h)
     }
   }
 
@@ -113,27 +129,28 @@ export function Preview() {
     const canv = canvasRef.current as HTMLCanvasElement
     const ctx = canv.getContext('2d')
     if (!ctx) return
-
+    console.log(`masks: `, masks)
     if (masks.length && maskVisible) {
-      for (const mask of masks) {
-        const index = masks.indexOf(mask)
+      masks.forEach((mask, index) => {
+        console.log(`maskData[${index}]: `, maskData[index])
         const [x, y, w, h] = maskData[index].canvas_box
-
+        console.log(`maskData[${index}]: `, maskData[index])
+        console.log(`masks[${index}]`, masks[index])
         let image = new Image()
-        if (maskData[index].active) {
-          image = masks[index].segmentation
-        }
         if (maskData[index].include) {
-          image = masks[index].mask
+          image = mask.mask
         }
         if (maskData[index].exclude) {
-          image = masks[index].inverted_mask
+          image = mask.inverted_mask
         }
-        if (!image) continue
-        console.log(`image.width: ${image.width} image.height: ${image.height}`)
+        if (maskData[index].active) {
+          image = mask.segmentation
+        }
+
+        console.log(`image ${image}`)
 
         ctx.drawImage(image, 0, 0, image.width, image.height, x, y, w, h)
-      }
+      })
     }
   }
 
@@ -154,114 +171,144 @@ export function Preview() {
   }
 
   const pointerDown: PointerEventHandler<HTMLCanvasElement> = (e) => {
-    if (!canvasRef.current || contextMenuOpen.current || !currentImage) return
+    if (!canvasRef.current || fetchingMasks.current || !layerHistory.length) return
+    console.log('pointerDown')
     const canv = canvasRef.current as HTMLCanvasElement
+
     pointerDownRef.current = true
-    const { x: bx, y: by } = canv.getBoundingClientRect()
-    const x = e.clientX - bx
-    const y = e.clientY - by
+    const { x: bx, y: by, top, left, width, height } = canv.getBoundingClientRect()
+    let x = e.clientX - bx
+    let y = e.clientY - by
     pointerCanvasCoords.current = [x, y, 0, 0]
-    selectionBox.current = [x, y, 0, 0]
-    setSelectionBoxVisible(true)
+    const scaleX = canv.width / width
+    const scaleY = canv.height / height
+
+    // x *= scaleX
+    // y *= scaleY
+
+    console.log(
+      `bx: ${bx}, by: ${by}, e.clientX: ${e.clientX} e.clientY: ${e.clientY}, x: ${x} y: ${y}`
+    )
+
+    // selectionBox.current = [x, y, 0, 0]
+    setPreviewStatus({
+      selection: `x: ${x.toFixed(2)} y: ${y.toFixed(2)} size: 0x0`,
+    })
   }
 
   const pointerMove: PointerEventHandler<HTMLCanvasElement> = (e) => {
-    if (!canvasRef.current) return
-    const canv = canvasRef.current as HTMLCanvasElement
+    if (
+      pointerDownRef.current &&
+      !contextMenuOpen.current &&
+      canvasRef.current &&
+      !fetchingMasks.current &&
+      layerHistory.length
+    ) {
+      const canv = canvasRef.current as HTMLCanvasElement
+      let x1,
+        y1
+        // if (selectionBoxVisible) {
+        // ;[x1, y1] = selectionBox.current
+        // } else {
+      ;[x1, y1] = pointerCanvasCoords.current
+      // }
 
-    if (pointerDownRef.current && !contextMenuOpen.current) {
-      const [x1, y1] = selectionBox.current
-      const { x: bx, y: by } = canv.getBoundingClientRect()
-      const x2 = e.clientX - bx
-      const y2 = e.clientY - by
-      const x = Math.min(x1, x2)
-      const y = Math.min(y1, y2)
-      const w = Math.abs(x2 - x1)
-      const h = Math.abs(y2 - y1)
+      const { x: bx, y: by, left, top, width, height } = canv.getBoundingClientRect()
+      let x2 = e.clientX - bx
+      let y2 = e.clientY - by
+      const scaleX = canv.width / width
+      const scaleY = canv.height / height
+
+      x1 *= scaleX
+      y1 *= scaleY
+      x2 *= scaleX
+      y2 *= scaleY
+
+      let x = Math.min(x1, x2)
+      let y = Math.min(y1, y2)
+      // let x = x1
+      // let y = y1
+      let w = Math.abs(x2 - x1)
+      let h = Math.abs(y2 - y1)
+
+      // x *= scaleX
+      // y *= scaleY
+      // w *= scaleX
+      // h *= scaleY
+
+      // pointerCanvasCoords.current = [x, y]
       selectionBox.current = [x, y, w, h]
-
-      const ctx = canv.getContext('2d')
-      if (!ctx) return
-
-      if (currentImage) {
-        ctx.clearRect(0, 0, canv.width, canv.height)
-        const scaleX = canv.width / currentImage.width
-        const scaleY = canv.height / currentImage.height
-        const scale = Math.min(scaleX, scaleY)
-        ctx.drawImage(
-          currentImage,
-          0,
-          0,
-          currentImage.width,
-          currentImage.height,
-          canv.width / 2 - (currentImage.width / 2) * scale,
-          canv.height / 2 - (currentImage.height / 2) * scale,
-          currentImage.width * scale,
-          currentImage.height * scale
-        )
-
-        if (masks.length && maskVisible) {
-          for (const mask of masks) {
-            const index = masks.indexOf(mask)
-            const [x, y, w, h] = maskData[index].canvas_box
-
-            let image = new Image()
-            if (maskData[index].active) {
-              image = masks[index].segmentation
-            }
-            if (maskData[index].include) {
-              image = masks[index].mask
-            }
-            if (maskData[index].exclude) {
-              image = masks[index].inverted_mask
-            }
-            if (!image) continue
-            console.log(`image.width: ${image.width} image.height: ${image.height}`)
-
-            ctx.drawImage(image, 0, 0, image.width, image.height, x, y, w, h)
-          }
-        }
-      }
-      if (selectionBoxVisible) {
-        ctx.strokeStyle = 'white'
-        ctx.setLineDash([15, 15])
-        ctx.lineWidth = 2
-        ctx.strokeRect(x, y, w, h)
-      }
+      if (!selectionBoxVisible) setSelectionBoxVisible(true)
+      dispatch(
+        setPreviewStatus({
+          selection: `x: ${x.toFixed(2)} y: ${y.toFixed(2)} size:${w.toFixed(0)}x${h.toFixed(0)}`,
+        })
+      )
+      drawLayers()
+      drawMasks()
+      drawSelectionBox()
     }
   }
 
   const pointerUp: PointerEventHandler<HTMLCanvasElement> = (e) => {
-    if (!canvasRef.current || contextMenuOpen.current || !pointerDownRef.current) return
+    if (
+      !canvasRef.current ||
+      !pointerDownRef.current ||
+      fetchingMasks.current ||
+      !layerHistory.length
+    )
+      return
     console.log('pointerUp')
-    dispatch(setMaskBox(selectionBox.current))
+
     const canv = canvasRef.current as HTMLCanvasElement
     pointerDownRef.current = false
 
-    const [x1, y1] = selectionBox.current
-    const { x: bx, y: by } = canv.getBoundingClientRect()
-    const x2 = e.clientX - bx
-    const y2 = e.clientY - by
-    const x = Math.min(x1, x2)
-    const y = Math.min(y1, y2)
-    const w = Math.abs(x2 - x1)
-    const h = Math.abs(y2 - y1)
+    let [x1, y1] = selectionBox.current
+    const { x: bx, y: by, left, top, width, height } = canv.getBoundingClientRect()
+    let x2 = e.clientX - bx
+    let y2 = e.clientY - by
+    let x = Math.min(x1, x2)
+    let y = Math.min(y1, y2)
+    let w = Math.abs(x2 - x1)
+    let h = Math.abs(y2 - y1)
 
-    if (Math.abs(x2 - x) < 10 && Math.abs(y2 - y) < 10 && maskData.length) {
-      console.log(`maskData: `, maskData)
-      dispatch(nextMask())
-      console.log(`maskIndex: ${maskIndex.value}`)
-      dispatch(setMaskIndex((maskIndex.value + 1) % maskData.length))
-      drawCurrentImage()
-      drawMasks()
-      drawSelectionBox()
+    // let scaleX = canv.width / width
+    // let scaleY = canv.height / height
+    // let scale = Math.min(scaleX, scaleY)
+
+    if (w < 10 && h < 10) {
+      if (maskData.length) dispatch(nextMask())
+      setSelectionBoxVisible(false)
+      // drawLayers()
+      // drawMasks()
+      // drawSelectionBox()
+
       return
     }
 
-    selectionBox.current = [x, y, w, h]
-    dispatch(setMaskBox(selectionBox.current))
+    drawLayers()
+    drawMasks()
+    drawSelectionBox()
 
-    drawCurrentImage()
+    // selectionBox.current = [x, y, w, h]
+    // dispatch(setMaskBox(selectionBox.current))
+
+    const rootLayer = layerHistory[currentHistoryIndex].find((layer) => layer.label === 'root')
+    let index = rootLayer?.currentLayerHistoryIndex as number
+    let bbox = rootLayer?.history[index].bbox
+
+    console.log('rootLayer?.history[index].bbox', bbox)
+    ;[x1, y1, x2, y2] = bbox as number[]
+    ;[x, y, w, h] = [x1, y1, x2 - x1, y2 - y1]
+
+    let scaleX = canv.width / w
+    let scaleY = canv.height / h
+    let scale = Math.min(scaleX, scaleY)
+
+    dispatch(setMaskBox(selectionBox.current))
+    dispatch(setScaledSelectionBox(selectionBox.current.map((n) => n / scale)))
+
+    drawLayers()
     drawMasks()
     drawSelectionBox()
   }
@@ -269,41 +316,34 @@ export function Preview() {
   const maskItemSelectHandler = (e) => {
     console.log('maskItemSelectHandler')
     e.stopPropagation()
-    const [x, y, w, h] = maskBox
-    console.log(`maskBox: ${maskBox}`)
-    // if (w < 10 && h < 10) return
 
-    if (!canvasRef.current || !currentImage) return
+    fetchingMasks.current = true
+
+    if (!canvasRef.current) return
     const canv = canvasRef.current as HTMLCanvasElement
 
-    const scaleX = canv.width / currentImage.width
-    const scaleY = canv.width / currentImage.height
-    const scale = Math.min(scaleX, scaleY)
-
-    const [sx, sy] = [
-      Math.floor((x - (canv.width / 2 - (currentImage.width * scale) / 2)) / scale),
-      Math.floor((y - (canv.height / 2 - (currentImage.height * scale) / 2)) / scale),
-    ]
-
-    const [sw, sh] = [Math.floor(w / scale), Math.floor(h / scale)]
-    const bbox = [sx, sy, sx + sw, sy + sh]
-
-    console.log(`bbox: ${bbox}`)
+    const layer = layerHistory[currentHistoryIndex].find((layer) => layer.selected) as Layer
 
     const ctx = canv.getContext('2d')
     if (!ctx) return
 
-    drawCurrentImage()
-
+    drawLayers()
     drawMasks()
-
     drawSelectionBox()
 
     const ws = new WebSocket('ws://127.0.0.1:8000/ws/mask')
-
+    const rootLayer = layerHistory[currentHistoryIndex].find((layer) => layer.label === 'root')
+    let index = rootLayer?.currentLayerHistoryIndex as number
+    let bbox = rootLayer?.history[index].bbox as number[]
+    const [x1, y1, x2, y2] = bbox as number[]
+    let [x, y, w, h] = [x1, y1, x2 - x1, y2 - y1]
+    const size = Math.max(w, h)
+    const [mx, my] = [Math.floor((size - w) / 2), Math.floor((size - h) / 2)]
+    ;[x, y, w, h] = scaledSelectionBox
+    bbox = [x - mx, y - my, x - mx + w, y - my + h]
     const message = {
-      image: history[currentHistoryIndex],
-      bbox: bbox,
+      layer,
+      bbox,
     }
 
     ws.onerror = (event) => {
@@ -314,240 +354,209 @@ export function Preview() {
     ws.onclose = (event) => {
       console.log('WebSocket closed', event)
       dispatch(toggleDisabled(false))
+      fetchingMasks.current = false
     }
 
     ws.onopen = () => {
       ws.send(JSON.stringify(message))
-      setSelectionBoxVisible(true)
+
+      dispatch(toggleDisabled(true))
       fetchingMask.current = true
       drawSelectionBox()
       ws.onmessage = (event) => {
         const data = JSON.parse(event.data)
+        console.log(`data: `, data)
         if (!Object.hasOwn(data, 'status')) {
           console.log(`data: `, data)
-          let new_data = [...data]
-          new_data[0].active = true
-          new_data = new_data.map((d) => ({ ...d, canvas_box: maskBox, bbox: bbox, active: false }))
-          dispatch(setMaskData([...maskData, ...new_data].toSorted((d1, d2) => d2.area - d1.area)))
-          dispatch(setMaskIndex(0))
-          if (canvasRef.current) {
-            drawCurrentImage()
-            const canv = canvasRef.current as HTMLCanvasElement
-            const ctx = canv.getContext('2d')
-            if (!ctx) return
-            const image = new Image()
-            image.src = `data:image/png;base64,${new_data[0].segmentation}`
-            image.onload = () => {
-              const [x, y, w, h] = new_data[0].canvas_box
-              ctx.drawImage(image, 0, 0, image.width, image.height, x, y, w, h)
 
-              setMaskVisible(true)
-            }
-          }
+          let new_data = [...data]
+          new_data = new_data.map((d) => ({ ...d, canvas_box: maskBox, bbox: bbox, active: false }))
+          let oldData = [...maskData]
+          oldData = oldData.map((d) => ({ ...d, active: false }))
+          let newMaskData = [...oldData, ...new_data].toSorted((d1, d2) => d2.area - d1.area)
+          newMaskData[0].active = true
+          dispatch(setMaskData([...newMaskData]))
+
+          // if (canvasRef.current) {
+          //   drawLayers()
+          //   drawMasks()
+          //   drawSelectionBox()
+          //   const canv = canvasRef.current as HTMLCanvasElement
+          //   const ctx = canv.getContext('2d')
+          //   if (!ctx) return
+          //   const image = new Image()
+          //   image.src = `data:image/png;base64,${new_data[0].segmentation}`
+          //   image.onload = () => {
+          //     const [x, y, w, h] = new_data[0].canvas_box
+          //     ctx.drawImage(image, 0, 0, image.width, image.height, x, y, w, h)
+          //   }
+          setMaskVisible(true)
+          setSelectionBoxVisible(false)
           ws.close()
         } else {
           console.log('WebSocket message received:', data)
         }
       }
+      // drawLayers()
+      // drawMasks()
+      // drawSelectionBox()
     }
   }
 
+  const saveFileHandler = async (e) => {}
+
   const canvasWheelHandler: WheelEventHandler = (e) => {
-    if (!canvasRef.current || !currentImage || debounce.current || !masks.length) return
-    // e.preventDefault()
+    if (debounce.current || !masks.length || !maskVisible) return
+
     e.stopPropagation()
+
     debounce.current = true
 
-    const canv = canvasRef.current as HTMLCanvasElement
     console.log(`e.deltaY: ${e.deltaY}`)
 
-    const [x1, y1] = selectionBox.current
-    const { x: bx, y: by } = canv.getBoundingClientRect()
-    const x2 = e.clientX - bx
-    const y2 = e.clientY - by
-    let x = Math.min(x1, x2)
-    let y = Math.min(y1, y2)
-    let w = Math.abs(x2 - x1)
-    let h = Math.abs(y2 - y1)
+    if (e.deltaY <= 0) dispatch(nextMask())
+    else dispatch(previousMask())
 
-    dispatch(
-      setMaskData(
-        maskData.map((data, index) => {
-          const new_data = { ...data }
-          if (data.id === maskData[maskIndex.value].id) {
-            new_data.active = false
-          }
+    drawLayers()
+    drawMasks()
+    drawSelectionBox()
 
-          if (index === (maskIndex.value + 1) % maskData.length && e.deltaY > 0) {
-            new_data.active = true
-          }
-          if (index === (maskIndex.value - 1) % maskData.length && e.deltaY <= 0) {
-            new_data.active = true
-          }
-          return new_data
-        })
-      )
-    )
-    dispatch(
-      setMaskIndex(
-        e.deltaY > 0
-          ? (maskIndex.value + 1) % maskData.length
-          : (maskIndex.value - 1) % maskData.length
-      )
-    )
-    selectionBox.current = [0, 0, 0, 0]
-
-    const ctx = canv.getContext('2d')
-    if (!ctx) return
-    if (currentImage) {
-      ctx.clearRect(x, y, w, h)
-      const scaleX = canv.width / currentImage.width
-      const scaleY = canv.height / currentImage.height
-      const scale = Math.min(scaleX, scaleY)
-      ctx.drawImage(
-        currentImage,
-        0,
-        0,
-        currentImage.width,
-        currentImage.height,
-        canv.width / 2 - (currentImage.width / 2) * scale,
-        canv.height / 2 - (currentImage.height / 2) * scale,
-        currentImage.width * scale,
-        currentImage.height * scale
-      )
-      ;[x, y, w, h] = maskData[0].canvas_box
-
-      if (masks.length && maskVisible) {
-        for (const mask of masks) {
-          const index = masks.indexOf(mask)
-          const [x, y, w, h] = maskData[index].canvas_box
-
-          let image = new Image()
-          if (maskData[index].active) {
-            image = masks[index].segmentation
-          }
-          if (maskData[index].include) {
-            image = masks[index].mask
-          }
-          if (maskData[index].exclude) {
-            image = masks[index].inverted_mask
-          }
-
-          ctx.drawImage(image, 0, 0, image.width, image.height, x, y, w, h)
-        }
-      }
-    }
-    setTimeout(() => (debounce.current = false), 500)
+    setTimeout(() => (debounce.current = false), 1000)
   }
 
   useEffect(() => {
     if (!canvasRef.current) return
     const canv = canvasRef.current as HTMLCanvasElement
+    canv.width = canv.clientWidth * devicePixelRatio
+    canv.height = canv.clientHeight * devicePixelRatio
     const ctx = canv.getContext('2d')
     if (!ctx) return
-    const image = new Image()
-    image.src = `data:image/png;base64,${history[currentHistoryIndex]}`
-    image.onload = () => setCurrentImage(image)
+    ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0)
+    const { width, height } = canv
+    const bbox = [0, 0, width, height]
+    console.log(`bbox: `, bbox)
+    dispatch(setPreviewCanvasSize(bbox))
+
+    const observer = new ResizeObserver((entries) => {
+      if (!canvasRef.current || !maskData.length) return
+      const canv = canvasRef.current as HTMLCanvasElement
+      const width = entries[0].borderBoxSize[0].inlineSize
+      const height = entries[0].borderBoxSize[0].blockSize
+      canv.width = width
+      canv.height = height
+      const bbox = [0, 0, width, height]
+      console.log(`bbox: `, bbox)
+      dispatch(setPreviewCanvasSize(bbox))
+      let [x1, y1, x2, y2] = rootBbox
+      let [x, y, w, h] = [x1, y1, x2 - x1, y2 - y1]
+      const scaleX = width / w
+      const scaleY = height / h
+      const scale = Math.min(scaleX, scaleY)
+      const newMaskData = maskData.map((data) => {
+        const bbox = data.bbox
+        const scaledBbox = bbox.map((n) => n * scale)
+        ;[x1, y1, x2, y2] = scaledBbox
+        const canvas_box = [x1, y1, x2 - x1, y2 - y1]
+        return { ...data, canvas_box }
+      })
+
+      dispatch(setMaskData(newMaskData))
+
+      // drawLayers()
+      // drawMasks()
+      // drawSelectionBox()
+    })
+
+    // observer.observe(canv)
+
+    return () => observer.unobserve(canv)
+  }, [])
+
+  useEffect(() => {
+    if (!layerHistory.length) return
+    console.log('layerHistory: ', layerHistory)
+    const images: HTMLImageElement[] = []
+    const layers = layerHistory[currentHistoryIndex]
+    for (const layer of layers) {
+      console.log('layer: ', layer)
+      const image = new Image()
+      image.src = `data:image/png;base64,${layer.history[layer.currentLayerHistoryIndex].imageData}`
+      images.push(image)
+    }
+
+    console.log('images: ', images)
+
+    let layerImgs: HTMLImageElement[][] = []
+    layerImgs = [...layerImages]
+    console.log(`currentHistoryIndex: ${currentHistoryIndex})`)
+    layerImgs[currentHistoryIndex] = images
+
+    console.log('layerImgs: ', layerImgs)
+
+    setLayerImages(layerImgs)
+  }, [layerHistory])
+
+  useEffect(() => {
+    drawLayers()
+    drawMasks()
+    drawSelectionBox()
   }, [currentHistoryIndex])
 
   useEffect(() => {
-    if (!canvasRef.current || !currentImage || !masks) return
+    if (!canvasRef.current || !layerImages) return
+    console.log('useEffect layerImages')
+    console.log('layerImages: ', layerImages)
+
     const canv = canvasRef.current as HTMLCanvasElement
     const ctx = canv.getContext('2d')
     if (!ctx) return
 
-    const image = currentImage
+    if (maskData.length) {
+      let [x1, y1, x2, y2] = rootBbox
+      let [x, y, w, h] = [x1, y1, x2 - x1, y2 - y1]
+      const scaleX = canv.width / w
+      const scaleY = canv.height / h
+      const scale = Math.min(scaleX, scaleY)
+      const newMaskData = maskData.map((data) => {
+        const bbox = data.bbox
+        const scaledBbox = bbox.map((n) => n * scale)
+        ;[x1, y1, x2, y2] = scaledBbox
+        const canvas_box = [x1, y1, x2 - x1, y2 - y1]
+        return { ...data, canvas_box }
+      })
 
-    const size = Math.min(canv.width, canv.height)
-    const scale_x = size / image.width
-    const scale_y = size / image.height
-    let scale = Math.min(scale_x, scale_y)
-    ctx.clearRect(0, 0, canv.width, canv.height)
-    ctx.drawImage(
-      image,
-      0,
-      0,
-      image.width,
-      image.height,
-      canv.width / 2 - (image.width / 2) * scale,
-      canv.height / 2 - (image.height / 2) * scale,
-      image.width * scale,
-      image.height * scale
-    )
-
-    if (masks.length && maskVisible) {
-      console.log('masks: ', masks)
-      for (const mask of masks) {
-        const index = masks.indexOf(mask)
-        console.log(`masks: `, masks)
-        console.log(`mask index: ${index}`)
-        const [x, y, w, h] = maskData[index].canvas_box
-
-        let image = new Image()
-
-        if (maskData[index].include) {
-          image = mask.mask
-        }
-        if (maskData[index].exclude) {
-          image = mask.inverted_mask
-        }
-
-        if (maskData[index].active) {
-          image = mask.segmentation
-        }
-        image.onload = () => {
-          ctx.drawImage(image, 0, 0, image.width, image.height, x, y, w, h)
-        }
-      }
+      dispatch(setMaskData(newMaskData))
     }
 
-    const observer = new ResizeObserver(async (entries, target) => {
-      const width = entries[0].borderBoxSize[0].inlineSize
-      const height = entries[0].borderBoxSize[0].blockSize
+    drawLayers()
+    drawMasks()
+    drawSelectionBox()
 
-      const size = Math.min(width, height)
-      const scale_x = size / image.width
-      const scale_y = size / image.height
-      let scale = Math.min(scale_x, scale_y)
-
-      const ctx = canv.getContext('2d')
-
-      if (!ctx) return
-      ctx.clearRect(0, 0, width, height)
-      ctx.drawImage(
-        image,
-        0,
-        0,
-        image.width,
-        image.height,
-        width / 2 - (image.width / 2) * scale,
-        height / 2 - (image.height / 2) * scale,
-        image.width * scale,
-        image.height * scale
-      )
-
-      drawMasks()
-
-      let [x, y, w, h] = selectionBox.current
-
-      let scaled_x = Math.min(width, 1024) / currentImage.width
-      let scaled_y = Math.min(height, 1024) / currentImage.height
-      scale = Math.min(scaled_x, scaled_y)
-
-      selectionBox.current = [x, y, w, h]
-      dispatch(setMaskBox(selectionBox.current))
-
-      drawSelectionBox()
-
-      dispatch(
-        setPreviewStatus({
-          ...status,
-          canvas: `width: ${canv.width}, height: ${canv.height}`,
-          image: `width: ${image.width}, height: ${image.height}`,
-          scale: scale,
-          currentHistoryIndex: currentHistoryIndex,
+    const observer = new ResizeObserver((entries, target) => {
+      if (maskData.length) {
+        const width = entries[0].borderBoxSize[0].inlineSize
+        const height = entries[0].borderBoxSize[0].blockSize
+        canv.width = width
+        canv.height = height
+        let [x1, y1, x2, y2] = rootBbox
+        let [x, y, w, h] = [x1, y1, x2 - x1, y2 - y1]
+        const scaleX = width / w
+        const scaleY = height / h
+        const scale = Math.min(scaleX, scaleY)
+        const newMaskData = maskData.map((data) => {
+          const bbox = data.bbox
+          const scaledBbox = bbox.map((n) => n * scale)
+          ;[x1, y1, x2, y2] = scaledBbox
+          const canvas_box = [x1, y1, x2 - x1, y2 - y1]
+          return { ...data, canvas_box }
         })
-      )
+
+        dispatch(setMaskData(newMaskData))
+      }
+
+      drawLayers()
+      drawMasks()
+      drawSelectionBox()
     })
 
     // observer.observe(canv)
@@ -555,82 +564,79 @@ export function Preview() {
     return () => {
       observer.disconnect()
     }
-  }, [currentImage])
+  }, [layerImages])
 
   useEffect(() => {
+    console.log(`maskData changed, mask index: ${maskIndex}`)
     if (!maskData.length) return
     console.log(`maskData: `, maskData)
     const maskImages: { [key: string]: HTMLImageElement }[] = []
 
     for (const data of maskData) {
       console.log(`data: ${data}`)
-      let keys: string[] = ['segmentation', 'mask', 'inverted_mask']
-      const images: { [key: string]: HTMLImageElement } = {}
-      for (const key of keys) {
-        const b64 = data[key]
-        const url = `data:image/png;base64,${b64}`
-        const image = new Image()
-        image.src = url
-        image.onload = () => {
-          images[key] = image
-        }
+      // let keys: string[] = ['segmentation', 'mask', 'inverted_mask']
+
+      let images: {
+        segmentation: HTMLImageElement
+        mask: HTMLImageElement
+        inverted_mask: HTMLImageElement
+      } = { segmentation: new Image(), mask: new Image(), inverted_mask: new Image() }
+      // for (const key of Object.values(keys)) {
+      let b64 = data.segmentation
+      let url = `data:image/png;base64,${b64}`
+      const segmentationImage = new Image()
+      segmentationImage.src = url
+      segmentationImage.onload = () => {
+        images.segmentation = segmentationImage
       }
+      b64 = data.mask
+      url = `data:image/png;base64,${b64}`
+      const maskImage = new Image()
+      maskImage.src = url
+      maskImage.onload = () => {
+        images.mask = maskImage
+      }
+      b64 = data.inverted_mask
+      url = `data:image/png;base64,${b64}`
+      const invertedMaskImage = new Image()
+      invertedMaskImage.src = url
+      invertedMaskImage.onload = () => {
+        images.inverted_mask = invertedMaskImage
+      }
+
       maskImages.push(images)
     }
-    setMasks(maskImages)
-    if (canvasRef.current) {
-      const canv = canvasRef.current as HTMLCanvasElement
-      const ctx = canv.getContext('2d')
-      if (!ctx) return
-    }
+    setMasks([...maskImages])
   }, [maskData])
 
   useEffect(() => {
-    if (
-      !canvasRef.current ||
-      history.length === 0 ||
-      currentHistoryIndex >= history.length ||
-      currentHistoryIndex < 0
-    )
-      return
-    console.log('Preview updating...')
-    const canv = canvasRef.current as HTMLCanvasElement
-    const { width, height } = canv.getBoundingClientRect()
-    canv.width = width
-    canv.height = height
-    const ctx = canv.getContext('2d')
-    if (!ctx) return
-
-    const image = new Image()
-    image.src = `data:image/png;base64,${history[currentHistoryIndex]}`
-
-    image.onload = () => {
-      ctx.clearRect(0, 0, canv.width, canv.height)
-      setCurrentImage(image)
-    }
-  }, [history])
-
-  useEffect(() => {
+    console.log(`masks changed, maskIndex: ${maskIndex}`)
     if (!masks.length) return
     console.log(`useEffect masks`)
     console.log(`masks: `, masks)
-    drawCurrentImage()
+    drawLayers()
     drawMasks()
     drawSelectionBox()
   }, [masks])
 
-  useEffect(() => {
-    if (!maskData.length) return
-    console.log(`useEffect maskIndex`)
-    drawCurrentImage()
-    drawMasks()
-    drawSelectionBox()
-  }, [maskIndex])
+  // useEffect(() => {
+  //   if (fetchingMasks) {
+  //     drawLayers()
+  //     drawMasks()
+  //     drawSelectionBox()
+  //   }
+  // }, [fetchingMasks])
+
+  // useEffect(() => {
+  //   drawLayers()
+  //   drawMasks()
+  //   drawSelectionBox()
+  // }, [selectionBoxVisible])
 
   // const removeSelect = () => {
   //   dispatch(
   //     setSelectedMaskData(
-  //       selectedMaskData.filter((data) => data.id !== maskData[maskIndex.value].id)
+  //       selectedMaskData.filter((data) => data.id !== maskData[maskIndex].id)
   //     )
   //   )
   // }
@@ -640,7 +646,7 @@ export function Preview() {
       direction="vertical"
       className="relative flex flex-col items-center justify-start w-full h-full"
     >
-      <ResizablePanel>
+      <ResizablePanel className="w-full h-full">
         <div className="flex h-[48px] min-h-[48px] items-start justify-between w-full bg-neutral-900 p-2">
           <div className="flex justify-start items-center gap-x-2 w-full">
             <button
@@ -649,6 +655,7 @@ export function Preview() {
                 dispatch(setCurrentHistoryIndex(currentHistoryIndex - 1))
               }}
               disabled={currentHistoryIndex === 0}
+              className="cursor-pointer"
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -665,7 +672,8 @@ export function Preview() {
                 console.log('Forward button clicked')
                 dispatch(setCurrentHistoryIndex(currentHistoryIndex + 1))
               }}
-              disabled={currentHistoryIndex === history.length - 1}
+              disabled={currentHistoryIndex === layerHistory.length - 1}
+              className="cursor-pointer"
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -678,32 +686,59 @@ export function Preview() {
               </svg>
             </button>
             <p className="text-white text-sm self-justify-center">
-              {currentHistoryIndex + 1}/{history.length}
+              {currentHistoryIndex + 1}/{layerHistory.length}
             </p>
+          </div>
+          <div className="flex items-center justify-center">
+            <label htmlFor="file">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                height="24px"
+                viewBox="0 -960 960 960"
+                width="24px"
+                fill="#e8eaed"
+              >
+                <path d="M480-320 280-520l56-58 104 104v-326h80v326l104-104 56 58-200 200ZM240-160q-33 0-56.5-23.5T160-240v-120h80v120h480v-120h80v120q0 33-23.5 56.5T720-160H240Z" />
+              </svg>
+              <input
+                id="file"
+                type="file"
+                onChange={() => {
+                  null
+                }}
+              />
+            </label>
           </div>
           {/* <Progress value={progress} className=" top-0, left-0 w-full h-2" /> */}
         </div>
-        <div className="flex flex-col relative justify-start w-full xl:min-h-[1024px]">
+        <div className="flex flex-col relative justify-start w-full">
           <ContextMenu
             onOpenChange={(open) => {
-              contextMenuOpen.current = open
+              console.log(`menu open: ${open}`)
+              if (open) contextMenuOpen.current = true
+              else setTimeout(() => (contextMenuOpen.current = false), 500)
+              drawLayers()
+              drawMasks()
+              drawSelectionBox()
               pointerDownRef.current = false
             }}
           >
             <ContextMenuTrigger>
               <canvas
                 ref={canvasRef}
-                className="relative w-full lg:h-fit cursor-crosshair"
+                className="relative w-full h-full cursor-crosshair aspect-square"
                 width={1024}
                 height={1024}
                 onPointerDown={pointerDown}
                 onPointerMove={pointerMove}
                 onPointerUp={pointerUp}
-                // onWheel={canvasWheelHandler}
+                onWheel={canvasWheelHandler}
               ></canvas>
             </ContextMenuTrigger>
             <ContextMenuContent className="bg-neutral-800">
-              <ContextMenuItem onSelect={(e) => maskItemSelectHandler(e)}>Mask</ContextMenuItem>
+              <ContextMenuItem className="text-white" onSelect={(e) => maskItemSelectHandler(e)}>
+                Mask
+              </ContextMenuItem>
               <ContextMenuItem
                 disabled={masks.length === 0}
                 onSelect={(e) => {
@@ -714,6 +749,7 @@ export function Preview() {
                 {maskVisible ? 'Hide' : 'Show'}
               </ContextMenuItem>
               <ContextMenuItem
+                className="text-white"
                 disabled={masks.length === 0}
                 onSelect={(e) => {
                   e.stopPropagation()
@@ -721,7 +757,7 @@ export function Preview() {
                     setMaskData(
                       maskData.map((data, index) => {
                         const new_data = { ...data }
-                        if (index == maskIndex.value) {
+                        if (index == maskIndex) {
                           new_data.include = true
                           new_data.exclude = false
                         }
@@ -730,8 +766,8 @@ export function Preview() {
                     )
                   )
                   let newSelectedMasks = [...selectedMasks]
-                  const { id, mask: imageData } = maskData[maskIndex.value]
-                  if (maskIndex.value > selectedMasks.length - 1) {
+                  const { id, mask: imageData } = maskData[maskIndex]
+                  if (maskIndex > selectedMasks.length - 1) {
                     newSelectedMasks.push({ id, imageData })
                   } else {
                     newSelectedMasks = newSelectedMasks.toSpliced(
@@ -755,7 +791,7 @@ export function Preview() {
                     setMaskData(
                       maskData.map((data, index) => {
                         const new_data = { ...data }
-                        if (index == maskIndex.value) {
+                        if (index == maskIndex) {
                           new_data.include = false
                           new_data.exclude = true
                         }
@@ -764,8 +800,8 @@ export function Preview() {
                     )
                   )
                   let newSelectedMasks = [...selectedMasks]
-                  const { id, inverted_mask: imageData } = maskData[maskIndex.value]
-                  if (maskIndex.value > selectedMasks.length - 1) {
+                  const { id, inverted_mask: imageData } = maskData[maskIndex]
+                  if (maskIndex > selectedMasks.length - 1) {
                     newSelectedMasks.push({ id, imageData })
                   } else {
                     newSelectedMasks = newSelectedMasks.toSpliced(
@@ -789,7 +825,7 @@ export function Preview() {
                     setMaskData(
                       maskData.map((data, index) => {
                         const new_data = { ...data }
-                        if (index == maskIndex.value) {
+                        if (index == maskIndex) {
                           new_data.active = true
                           new_data.include = false
                           new_data.exclude = false
@@ -799,8 +835,8 @@ export function Preview() {
                     )
                   )
                   let newSelectedMasks = [...selectedMasks]
-                  const { id, segmentation: imageData } = maskData[maskIndex.value]
-                  if (maskIndex.value > selectedMasks.length - 1) {
+                  const { id, segmentation: imageData } = maskData[maskIndex]
+                  if (maskIndex > selectedMasks.length - 1) {
                     newSelectedMasks.push({ id, imageData })
                   } else {
                     newSelectedMasks = newSelectedMasks.toSpliced(
@@ -830,8 +866,8 @@ export function Preview() {
                     )
                   )
                   let newSelectedMasks = [...selectedMasks]
-                  const { id, segmentation: imageData } = maskData[maskIndex.value]
-                  if (maskIndex.value > selectedMasks.length - 1) {
+                  const { id, segmentation: imageData } = maskData[maskIndex]
+                  if (maskIndex > selectedMasks.length - 1) {
                     newSelectedMasks.push({ id, imageData })
                   } else {
                     newSelectedMasks = newSelectedMasks.toSpliced(
@@ -852,7 +888,7 @@ export function Preview() {
                   dispatch(setSelectedMasks([]))
                   setMasks([])
                   dispatch(setMaskData([]))
-                  drawCurrentImage()
+                  drawLayers()
                 }}
               >
                 Clear
@@ -874,7 +910,7 @@ export function Preview() {
             size="lg"
             aria-label="merge select"
             onClick={() => {
-              const selectedMask = { ...maskData[maskIndex.value] }
+              const selectedMask = { ...maskData[maskIndex] }
               const [x, y, w, h] = scaledSelectionBox
               selectedMask.bbox = [x, y, x + w, y + h]
               selectedMask.canvas_box = maskBox
@@ -883,7 +919,7 @@ export function Preview() {
                 setMaskData([
                   ...maskData.map((data, index) => {
                     const new_data = { ...data }
-                    if (index === maskIndex.value) {
+                    if (index === maskIndex) {
                       new_data.active = false
                       new_data.include = true
                       new_data.exclude = false

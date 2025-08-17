@@ -6,19 +6,22 @@ import { useAppStore, useAppDispatch, useAppSelector } from '@/lib/hooks'
 import {
   setSelectedImage,
   setEditorCanvasData,
-  setCollection,
   setSelectedMaskData,
   setMaskData,
   setMasks,
   setMaskIndex,
 } from '@/lib/features/image-editor/imageEditorSlice'
+
+import { setCollection } from '@/lib/features/control-panel/controlPanelSlice'
 import { ScrollArea, ScrollBar } from './ui/scroll-area'
 
-async function fetchImages(): Promise<MetadataEntry[]> {
+async function fetchImages(collection: string): Promise<MetadataEntry[]> {
   const res = await fetch(`http://127.0.0.1:8000/api/images`, {
+    method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
+    body: JSON.stringify({ collection: collection }),
   })
   if (!res.ok) {
     throw new Error(`Failed to fetch metadata: ${res.status} ${res.statusText}`)
@@ -39,7 +42,6 @@ async function deleteImage(filename: string) {
 }
 
 export const ImageGallery = () => {
-  console.log('ImageGallery')
   const dispatch = useAppDispatch()
   const queryClient = useQueryClient()
   const {
@@ -51,19 +53,35 @@ export const ImageGallery = () => {
   } = useQuery(
     queryOptions({
       queryKey: ['images'],
-      queryFn: fetchImages,
+      queryFn: async () => {
+        const res = await fetch(`http://127.0.0.1:8000/api/images`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ collection: collection }),
+        })
+
+        if (!res.ok) {
+          throw new Error(`Failed to fetch images: ${res.status} ${res.statusText}`)
+        }
+        return await res.json()
+      },
       refetchOnWindowFocus: false,
       staleTime: Infinity,
     })
   )
 
-  const collection = useAppSelector((state) => state.imageEditor.collection)
+  const collection = useAppSelector((state) => state.controlPanel.collection)
+
+  // useEffect(() => {
+  //   dispatch(setCollection('nsfw'))
+  // }, [])
 
   useEffect(() => {
-    dispatch(setCollection('nsfw'))
-  }, [])
-
-  useEffect(() => {}, [collection])
+    ;(async () =>
+      await queryClient.invalidateQueries({ queryKey: ['images'], refetchType: 'all' }))()
+  }, [collection])
 
   const handleDelete = async (
     e: React.MouseEvent<HTMLImageElement, MouseEvent>,

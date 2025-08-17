@@ -13,6 +13,7 @@ import os
 import time
 import math
 import uuid
+from .SDXL import Layer
 
 sam_model = None
 sam_processor = None
@@ -77,15 +78,15 @@ async def generate_masks(image_data: str, width: int = 1024, height: int = 1024)
     image = Image.open(BytesIO(bytes)).convert("RGB")
     # print(f"image: {image}")
     image.save(os.path.join(os.getcwd(), "app/test_images/SAM_input_img.png"))
-    # width_scale = 1024 / image.width
-    # height_scale = 1024 / image.height
-    # scale = min(width_scale, height_scale)
-    # image = image.resize((int(image.width * scale), int(image.height * scale)))
+    width_scale = 1024 / image.width
+    height_scale = 1024 / image.height
+    scale = min(width_scale, height_scale)
+    image = image.resize((int(image.width * scale), int(image.height * scale)))
 
     # print(f"Image size: {image.width}x{image.height}, mode: {image.mode}, format: {image.format}")
     # arr = np.asarray(image)
     # print(f"Array shape: {arr.shape} Array dtype: {arr.dtype}")
-    # image = image.convert('RGB')
+    image = image.convert('RGB')
     # arr = np.asarray(image)
     # print(f"Array shape: {arr.shape} Array dtype: {arr.dtype}")
     # print(f"Image size: {image.width}x{image.height}, mode: {image.mode}, format: {image.format}")
@@ -101,6 +102,7 @@ async def generate_masks(image_data: str, width: int = 1024, height: int = 1024)
     j = 0
     mask_count = 1
     step = 1
+
     for mask in masks:
 
         mask["id"] = uuid.uuid4().hex
@@ -183,13 +185,16 @@ def depad(image: Image.Image, original_size: tuple[int, int]):
 
     return image
 
-async def generate_mask(image: str, bbox: List[int]):
-    b64 = extract_base64_data(image)
+async def generate_mask(layer, bbox):
+    index = layer["currentLayerHistoryIndex"]
+    image_data = layer["history"][index]["imageData"]
+    b64 = extract_base64_data(image_data)
     bytes = base64.b64decode(b64)
     img = Image.open(BytesIO(bytes)).convert("RGB")
     enhancer = ImageEnhance.Contrast(img)
     enhancer.enhance(1.75)
-    # img.save(os.path.join(os.getcwd(),"app/test_images/SAM-generate-mask-original.png"))
+    img.save(os.path.join(os.getcwd(),"app/test_images/SAM-generate-mask-contrast.png"))
+    print(f"bbox: {bbox}")
     x1, y1, x2, y2 = bbox
 
     cropped = img.crop((x1, y1, x2, y2))
@@ -199,8 +204,7 @@ async def generate_mask(image: str, bbox: List[int]):
     # cropped = cropped.filter(ImageFilter.UnsharpMask(radius=2, percent=150, threshold=3))
     # cropped = cropped.resize((int(cropped.width * scale), int(cropped.height * scale)), Image.BICUBIC)
     # padded = ImageOps.pad(cropped, (512, 512), color=(128, 128, 128))
-    # cropped.save(os.path.join(os.getcwd(),"app/test_images/SAM-generate-mask-cropped.png"))
-
+    cropped.save(os.path.join(os.getcwd(),"app/test_images/SAM-generate-mask-cropped.png"))
     # scale_x = 1024 / image.width
     # scale_y = 1024 / image.height
     # scale = min(scale_x, scale_y)
@@ -312,4 +316,4 @@ async def generate_mask(image: str, bbox: List[int]):
         # mask_data.append(data)
 
     # return [data]
-    return await generate_masks(image_data=b64, width=cropped.width, height=cropped.height)
+    return await generate_masks(image_data=b64, )

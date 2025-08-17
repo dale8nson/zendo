@@ -6,6 +6,7 @@ import {
   setPreviewCanvasData,
   appendHistory,
   setCurrentHistoryIndex,
+  newImage,
 } from '@/lib/features/preview/previewSlice'
 import { setSelectedMaskData, setMaskData } from '@/lib/features/image-editor/imageEditorSlice'
 import { Toggle } from '@/components/ui/toggle'
@@ -23,6 +24,7 @@ export function ImageControlPanel() {
   const maskIndex = useAppSelector((state) => state.imageEditor.maskIndex)
   const scaledSelectionBox = useAppSelector((state) => state.imageEditor.scaledSelectionBox)
   const maskBox = useAppSelector((state) => state.imageEditor.maskBox)
+  const previewCanvasSize = useAppSelector((state) => state.preview.previewCanvasSize)
 
   const dispatch = useAppDispatch()
 
@@ -60,10 +62,10 @@ export function ImageControlPanel() {
         `editorCanvasData: ${editorCanvasData?.slice(0, 29)} history.length: ${history.length} history[${currentHistoryIndex}] ${history[currentHistoryIndex]?.slice(0, 29)}`
       )
 
-      if (currentHistoryIndex >= 0) {
-        dispatch(appendHistory(selectedImage.image_data))
-        dispatch(setCurrentHistoryIndex(history.length))
-      }
+      // if (currentHistoryIndex >= 0) {
+      //   dispatch(appendHistory(selectedImage.image_data))
+      //   dispatch(setCurrentHistoryIndex(history.length))
+      // }
     }
   }, [buttonPressed])
 
@@ -71,12 +73,21 @@ export function ImageControlPanel() {
     <div className="h-full flex flex-col items-center justify-center space-y-2 max-w-full bg-neutral-900 p-2">
       <Button
         ref={ref}
+        className="cursor-pointer"
         // className="bg-neutral-800 min-w-[4.5rem]] max-h-[4rem] p-2 text-neutral-400 border-neutral-700 flex justify-center items-center text-lg rounded hover:bg-neutral-700 hover:text-neutral-600 hover:border-neutral-800"
         onClick={() => {
           console.log('Button clicked')
           if (!selectedImage) return
-          dispatch(appendHistory(selectedImage.image_data))
-          dispatch(setCurrentHistoryIndex(history.length))
+          const { width, height, image_data } = selectedImage
+          const size = Math.max(width, height)
+          const [mx, my] = [(size - width) / 2, (size - height) / 2]
+          const [x1, y1] = [mx, my]
+          const [x2, y2] = [x1 + width, y1 + height]
+          const bbox = [x1, y1, x2, y2]
+          // const bbox = [0, 0, selectedImage.width, selectedImage.height]
+
+          dispatch(newImage({ bbox, imageData: image_data }))
+          // dispatch(setCurrentHistoryIndex(history.length))
         }}
         // onMouseDown={() => setButtonPressed(true)}
         // onMouseUp={() => setButtonPressed(false)}

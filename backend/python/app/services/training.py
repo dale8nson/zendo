@@ -1,14 +1,16 @@
 import torch
 import torch.nn.functional as F
 import torchvision.transforms as T
+from torch.utils.data import Dataset
 from torchvision import transforms
 import safetensors
+from safetensors.torch import save_file, load_file
 from transformers import CLIPTokenizer, CLIPTextModelWithProjection, CLIPTextModel, get_scheduler
-from diffusers import StableDiffusionXLPipeline, StableDiffusionXLInpaintPipeline, StableDiffusionXLImg2ImgPipeline
+from diffusers import StableDiffusionXLPipeline, StableDiffusionXLInpaintPipeline, StableDiffusionXLImg2ImgPipeline, StableDiffusionXLControlNetPipeline, DiffusionPipeline
 from diffusers.utils.import_utils import is_xformers_available
 from pydantic.main import BaseModel
 from typing import List, Tuple, Dict, cast
-from PIL import Image, ImageEnhance, ImageChops, ImageOps
+from PIL import Image, ImageEnhance, ImageChops, ImageOps, ImageFilter
 import base64
 from io import BytesIO
 import os
@@ -21,10 +23,11 @@ from tqdm.auto import tqdm
 import re
 from accelerate import Accelerator
 from accelerate.utils import ProjectConfiguration, set_seed
-from app.services.SDXL import get_pipe, get_refiner, get_inpainter
+from app.services.SDXL import get_pipe, get_refiner, get_inpainter, get_controlnet, init_SDXL
 from app.services.textual_inversion.textual_inversion_sdxl import TextualInversionDataset
 import inspect
 import gc
+from datetime import datetime, timezone
 
 from diffusers import (
     AutoencoderKL,
@@ -57,7 +60,7 @@ class MaskData(BaseModel):
 
 class DatasetPostRequest(BaseModel):
     image_data: str
-    masks: List[MaskData]
+    bbox: List[int]
     collection: str
     token: str
     caption: str
@@ -111,10 +114,6 @@ def generate_images(image, bg, bbox, mask, size=1024):
     print(f"bbox: {bbox}")
     print(f"mask: {mask}")
 
-    # scale_x = size / bg.width
-    # scale_y = size / bg.height
-    # scale = min(scale_x, scale_y)
-    # bg = bg.resize((math.floor(bg.width * scale), math.floor(bg.height * scale)))
     full_mask = Image.new("L", (1024, 1024), color=0)
 
     positioned = bg.copy()
@@ -532,7 +531,7 @@ class CustomPromptDataset(TextualInversionDataset):
         if not image.mode == "RGB":
             image = image.convert("RGB")
 
-        placeholder_string = self.placeholder_token
+        placeholder_holder = self.placeholder_token
 
         text = self.captions[self.image_paths[i % self.num_images].name]
 
@@ -582,6 +581,11 @@ class CustomPromptDataset(TextualInversionDataset):
 
 def save_progress(text_encoder, placeholder_token_ids, placeholder_token, save_path, accelerator=None, safe_serialization=True):
     print("Saving embeddings")
+    learned_embeds_dict = {}
+    if os.path.exists(save_path):
+        learned_embeds_dict = load_file(save_path)
+
+
     if accelerator is not None:
         learned_embeds = (
             accelerator.unwrap_model(text_encoder)
@@ -594,7 +598,8 @@ def save_progress(text_encoder, placeholder_token_ids, placeholder_token, save_p
             .get_input_embeddings()
             .weight[min(placeholder_token_ids) : max(placeholder_token_ids) + 1]
         )
-    learned_embeds_dict = {placeholder_token: learned_embeds.detach().cpu()}
+
+    learned_embeds_dict[placeholder_token] = learned_embeds.detach().cpu()
 
     if safe_serialization:
         safetensors.torch.save_file(learned_embeds_dict, save_path, metadata={"format": "pt"})
@@ -602,130 +607,269 @@ def save_progress(text_encoder, placeholder_token_ids, placeholder_token, save_p
         torch.save(learned_embeds_dict, save_path)
 
 
-# async def train(collection:str,
-# token: str,
-# resolution=1024,
-# max_train_steps=400,
-# num_training_steps=400,
-# train_batch_size=1,
-# gradient_accumulation_steps=1,
-# lr=1e-4,
-# lr_num_cycles=1,
-# betas=(0.9, 0.999),
-# eps=1e-08,
-# weight_decay=0.0,
-# num_epochs=1,
-# lr_warmup_steps=20,
-# validation_steps=100,
-# batch_size=1,
-# num_workers=0,
-# save_steps=0,
-# resume_from_checkpoint="latest"):
 
-#     # ------------------------------
-#     # Setup
-#     # ------------------------------
-#     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+class OneImageDataset(Dataset):
 
-#     if torch.backends.mps.is_available():
-#         torch.mps.empty_cache()
-#     if torch.cuda.is_available():
-#         torch.cuda.empty_cache()
+    def __init__(self, image_data: str, bbox: tuple[float, float, float, float], placeholder_token: str, initializer_token: str, collection: str, prompt: str, repeats: int, tokenizer_1, tokenizer_2, mask_data: List[MaskData], size=1024):
 
-#     # Use FP16 for VAE, UNet; FP32 for text encoders
-#     weight_dtype = torch.float16
+        b64 = extract_base64_data(image_data)
+        bytes = base64.b64decode(b64)
+        image = Image.open(BytesIO(bytes)).convert("RGB")
 
-#     accelerator = Accelerator(mixed_precision="fp16" if weight_dtype == torch.float16 else "no")
+        self._image = image
+        self._bbox = bbox
 
-#     output_dir = os.path.join(os.getcwd(), f"../models/user/{collection}")
+        x1, y1, x2, y2 = self._bbox
 
-#     # ------------------------------
-#     # Load Models
-#     # ------------------------------
-#     model_path = os.path.join(os.getcwd(), "../models/sdxl-base-1.0")
-#     # VAE and UNet in FP16
-#     vae = AutoencoderKL.from_pretrained(model_path, subfolder="vae", torch_dtype=weight_dtype)
-#     vae.eval()
-#     vae.use_slicing = True
-#     vae.use_tiling = True
-#     vae = vae.to(device)
+        new_x1 = image.width - x2
+        new_x2 = image.width - x1
 
-#     unet = UNet2DConditionModel.from_pretrained(model_path, subfolder="unet", torch_dtype=weight_dtype).to(device)
+        self._mirror = False
+        self._mirror_bbox = (new_x1, y1, new_x2, y2)
 
-#     unet.eval()
-#     unet.enable_gradient_checkpointing()
+        self._data_path = os.path.join(os.getcwd(), f'../models/user/{collection}/datasets/{placeholder_token}')
+        self._filenames = os.listdir(self._data_path)
 
-#     # Text encoders in FP32
-#     text_encoder_1 = CLIPTextModel.from_pretrained(model_path, subfolder="text_encoder").to(device)
-#     text_encoder_2 = CLIPTextModelWithProjection.from_pretrained(model_path, subfolder="text_encoder_2").to(device)
+        # composite_mask = Image.new("L", image.size, 0)
 
-#     vae.requires_grad_(False)
-#     unet.requires_grad_(False)
+        # mask_count = 0
+        # if len(mask_data) > 0:
+        #     mask_data = sorted(mask_data, key=lambda x: x["area"], reverse=True)
+        #     composite_mask_bbox = [composite_mask.width, composite_mask.height, 0, 0]
 
-#     text_encoder_1.text_model.encoder.requires_grad_(False)
-#     text_encoder_1.text_model.final_layer_norm.requires_grad_(False)
-#     text_encoder_1.text_model.embeddings.position_embedding.requires_grad_(False)
-#     text_encoder_2.text_model.encoder.requires_grad_(False)
-#     text_encoder_2.text_model.final_layer_norm.requires_grad_(False)
-#     text_encoder_2.text_model.embeddings.position_embedding.requires_grad_(False)
+        #     for data in mask_data:
+        #         mask = data["mask"] if data["include"] == True else data["inverted_mask"] if data["exclude"] == True else None
+        #         if mask is None:
+        #             continue
+        #         b64 = extract_base64_data(mask)
+        #         image_bytes = base64.b64decode(b64)
 
-#     text_encoder_1.gradient_checkpointing_enable()
-#     text_encoder_2.gradient_checkpointing_enable()
+        #         mask = Image.open(BytesIO(image_bytes))
 
-#     # Optimizer only for text encoders (typical in textual inversion)
-#     params = list(text_encoder_1.parameters()) + list(text_encoder_2.parameters())
-#     optimizer = optim.AdamW(params, lr=5e-5)
+        #         alpha_channel = mask.getchannel("A").convert("L")
 
-#     # Dummy dataloader (simulate pixel_values + token ids)
-#     dataloader = [
-#         {
-#             "pixel_values": torch.randn(1, 3, 512, 512),  # B,C,H,W
-#             "input_ids_1": torch.randint(0, 49408, (1, 77)),
-#             "input_ids_2": torch.randint(0, 49408, (1, 77)),
-#         }
-#         for _ in range(10)
-#     ]
+        #         binary_mask = alpha_channel.point(lambda p: 255 if p > 0 else 0).convert("L")
 
-#     # Prepare only VAE, UNet, optimizer, dataloader for FP16
-#     vae, unet, optimizer, dataloader = accelerator.prepare(vae, unet, optimizer, dataloader)
+        #         bbox = [int(n * scale) for n in data["bbox"]]
+        #         bbox = cast(tuple[int, int, int, int], tuple([bbox[i] + margin_x if i % 2 == 0 else bbox[i] + margin_y for i in range(len(bbox))]))
+        #         bbox = [int(n) for n in bbox]
+        #         x1, y1, x2, y2 = bbox
 
-#     # ------------------------------
-#     # Training Loop
-#     # ------------------------------
+        #         cx1, cy1, cx2, cy2 = composite_mask_bbox
+        #         composite_mask_bbox = min(x1, cx1), min(y1, cy1), max(x2, cx2), max(y2, cy2)
 
-#     for step, batch in enumerate(dataloader):
-#         with accelerator.accumulate(text_encoder_1):
-#             # Convert pixel_values to device, dtype
-#             pixel_values = batch["pixel_values"].to(device, dtype=weight_dtype)
+        #         w, h = x2 - x1, y2 - y1
+        #         binary_mask = binary_mask.resize((w, h))
+        #         print(f"bbox: {bbox}")
+        #         composite_mask.paste(binary_mask if data["include"] else ImageOps.invert(binary_mask), cast(tuple[int, int, int, int],tuple(bbox)), binary_mask)
 
-#             # Encode image to latent
-#             latents = vae.encode(pixel_values).latent_dist.sample()
-#             latents = latents * 0.18215  # scaling factor for SDXL
+        #     composite_mask = composite_mask.convert("L")
 
-#             # Encode text (stay in FP32)
-#             input_ids_1 = batch["input_ids_1"].to(device)
-#             input_ids_2 = batch["input_ids_2"].to(device)
+        #     lut = [255 if i > 0 else 0 for i in range(256)]
+        #     composite_mask = composite_mask.point(lut).convert('L')
 
-#             encoder_hidden_states_1 = text_encoder_1(input_ids_1).last_hidden_state
-#             encoder_hidden_states_2 = text_encoder_2(input_ids_2).last_hidden_state
+        #     b64 = extract_base64_data(mask_data)
+        #     bytes = base64.b64decode(b64)
+        #     mask = Image.open(BytesIO(bytes)).convert("RGB")
 
-#             # Dummy loss: MSE between text embeddings
-#             loss = nn.functional.mse_loss(encoder_hidden_states_1, encoder_hidden_states_2)
+        #     self._mask = mask
 
-#             # Backprop
-#             accelerator.backward(loss)
+        # else:
+        #     self.mask = None
 
-#             optimizer.step()
-#             optimizer.zero_grad()
+        self._placeholder_token = placeholder_token
+        self._initializer_token = initializer_token
+        self._repeats = repeats
+        self._size = size
+        self._tokenizer_1 = tokenizer_1
+        self._tokenizer_2 = tokenizer_2
+        self._jitter = T.ColorJitter(0.08, 0.08, 0.08, 0.02)
+        self._collection = collection
+        self._prompt = prompt
 
-#             print(f"Step {step}, Loss: {loss.item():.4f}")
+        with open(os.path.join(self._data_path, '../../captions.json')) as f:
+            self._captions = json.loads(f.read())
+
+    def __len__(self):
+        return self._repeats
+
+    def __getitem__(self, i: int):
+        transform_functions = [self.blur, self.mirror, self.jitter, self.resize]
+        transform_functions = [t for t in [transform_functions[i:j] for i in range(len(transform_functions) - 1) for j in range(i + 1, len(transform_functions) + 1)]]
+        example = {}
+
+        filename = random.choice(self._filenames)
+
+        prompt = None
+
+        while prompt is None:
+            try:
+                prompt = self._captions[filename]['caption']
+
+            except:
+                prompt = None
+                continue
+
+        print(f"training prompt: {prompt}")
+        self._bbox = self._captions[filename]['bbox']
+
+        image = Image.open(os.path.join(self._data_path, filename)).convert("RGB")
+
+
+
+        x1, y1, x2, y2 = self._bbox
+        self._mirror_bbox = (image.width - x2, y1, image.width - x1, y2)
+
+
+        choices = random.choice(transform_functions)
+        for t in choices:
+            image = t(image)
+
+        image = self.crop(image)
+
+
+        example["original_size"] = (image.height, image.width)
+        example["crop_top_left"] = (0, 0)
+        example["input_ids_1"] = self._tokenizer_1(
+            prompt,
+            padding="max_length",
+            truncation=True,
+            max_length=self._tokenizer_1.model_max_length,
+            return_tensors="pt",
+        ).input_ids[0]
+
+        example["input_ids_2"] = self._tokenizer_2(
+            prompt,
+            padding="max_length",
+            truncation=True,
+            max_length=self._tokenizer_2.model_max_length,
+            return_tensors="pt",
+        ).input_ids[0]
+
+        image.save(os.path.join(os.getcwd(), f"app/training_images/{self._collection}-{datetime.now(timezone.utc)}.png"))
+
+        image = np.asarray(image).astype(np.uint8)
+        image = (image / 127.5 - 1.0).astype(np.float32)
+        example["pixel_values"] = torch.from_numpy(image).permute(2, 0, 1)
+        print(f"example[\"pixel_values\"].size(): {example['pixel_values'].size()}")
+
+
+        return example
+
+    def image(self, image):
+        return self._image
+
+    def blur(self, image):
+        return image.filter(ImageFilter.GaussianBlur(random.randint(1, 5)))
+
+    def flip(self, image):
+        return ImageOps.flip(image)
+
+    def mirror(self, image):
+        self._mirror = True
+        return ImageOps.mirror(image)
+
+    def resize(self, image):
+        scale_x = self._size / image.width
+        scale_y = self._size / image.height
+        scale = max(scale_x, scale_y)
+        return image.resize((int(math.ceil(image.width * scale)), int(math.ceil(image.height * scale))))
+
+    def crop(self, image):
+        width, height = image.size
+
+        bbox = self._mirror_bbox if self._mirror else self._bbox
+
+
+        scale_x = self._size / width
+        scale_y = self._size / height
+        scale = max(scale_x, scale_y)
+
+        image = image.resize((int(math.ceil(width * scale)), int(math.ceil(height * scale))))
+        bbox = [int(n * scale) for n in bbox]
+
+        x1, y1, x2, y2 = bbox
+        x1 = x1 if x1 >= 0 else 0
+        y1 = y1 if y1 >= 0 else 0
+        x2 = x2 if x2 <= self._size else self._size
+        y2 = y2 if y2 <= self._size else self._size
+        w, h = x2 - x1, y2 - y1
+
+        min_x = int(x1 - w * 0.25)
+        min_x = min(min_x, image.width - self._size)
+        min_x = min_x if min_x >= 0 else 0
+
+        max_x = int(x1 + w * 0.25)
+        max_x = max_x if max_x < image.width - self._size and max_x >= min_x else image.width - self._size
+
+        print(f"min_x: {min_x} max_x: {max_x}")
+
+        min_y = int(y1 - h * 0.25)
+        min_y = min(min_y, image.height - self._size)
+        min_y = min_y if min_y >= 0 else 0
+
+        max_y = int(y1 + h * 0.25)
+        max_y = max_y if max_y < image.height - self._size and max_y >= min_y else image.height - self._size
+
+        print(f"min_y: {min_y} max_y: {max_y}")
+
+        x1 = random.randint(min_x, max_x)
+        y1 = random.randint(min_y, max_y)
+        x2 = x1 + self._size
+        y2 = y1 + self._size
+        bbox = (x1, y1, x2, y2)
+        print(f"bbox: {bbox}")
+        w, h = x2 - x1, y2 - y1
+        print(f"bbox size: {w}x{h}")
+        image =  image.crop((x1, y1, x2, y2))
+        print(f"image: {image}")
+        self._mirror = False
+        return image
+
+    def jitter(self, image):
+        return self._jitter(image)
+
+
+def save_checkpoint(tokenizer, tokenizer_2, text_encoder, text_encoder_2, token: str, weight_name: str, output_dir: str, step: int | None = None):
+    os.makedirs(output_dir, exist_ok=True)
+    print("saving checkpoint...")
+    tok_id1 = tokenizer.convert_tokens_to_ids(token)
+
+    emb1 = text_encoder.get_input_embeddings().weight[tok_id1].detach().cpu().unsqueeze(0)
+    name1 = f"{weight_name}.safetensors" if step is None else f"{weight_name}-steps-{step}.safetensors"
+
+    f = {}
+    save_path_1 = os.path.join(output_dir, name1)
+    if os.path.exists(save_path_1):
+        f = load_file(save_path_1)
+
+    print(f"token: {token}")
+    f[token] = emb1
+    save_file(f, save_path_1, {'format': 'pt'})
+
+    f = {}
+
+    tok_id2 = tokenizer_2.convert_tokens_to_ids(token)
+    emb2 = text_encoder_2.get_input_embeddings().weight[tok_id2].detach().cpu().unsqueeze(0)
+    name2 = f"{weight_name}_2.safetensors" if step is None else f"{weight_name}_2-steps-{step}.safetensors"
+    save_path_2 = os.path.join(output_dir, name2)
+    if os.path.exists(save_path_2):
+        f = load_file(save_path_2)
+    f[token] = emb2
+    save_file(f, save_path_2, {'format': 'pt'})
+
 
 async def train(
     collection:str,
     token: str,
+    image_data: str,
+    bbox: Tuple[int, int, int, int],
+    prompt: str,
+    initializer_token: str = "photo",
     resolution=1024,
-    max_train_steps=400,
-    num_training_steps=400,
+    max_train_steps=100,
+    num_training_steps=100,
+    repeats=100,
     train_batch_size=1,
     gradient_accumulation_steps=1,
     lr=1e-4,
@@ -738,44 +882,61 @@ async def train(
     validation_steps=100,
     batch_size=1,
     num_workers=0,
-    save_steps=0,
     resume_from_checkpoint="latest"
 ):
-    global pip, refiner, inpainter
+
     device = torch.device("mps" if torch.backends.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu")
+    num_processes = 1
+    accelerator = None
+    print(f"token: {token} initializer_token: {initializer_token}")
 
-    # refiner = get_refiner()
-    # inpainter = get_inpainter()
-
-    preprocess = transforms.Compose([
-        transforms.Resize((512, 512)),
-        transforms.ToTensor(),
-        transforms.Normalize([0.5], [0.5]),
-    ])
-
-    print(f"CUDA available: {torch.cuda.is_available()}")
-    print(f"Device: {torch.cuda.get_device_name(0)}")
-    print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
-    print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
-
-    x = torch.randn(1)
-    print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
-    print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
+    refiner = await get_refiner()
 
     if refiner is not None:
-        refiner = cast(StableDiffusionXLPipeline, refiner).to(torch.device("cpu"))
-        refiner = None
+        if isinstance(refiner, DiffusionPipeline):
+            refiner.to(torch.device("cpu"))
+            refiner = None
+
+    inpainter = await get_inpainter()
+
     if inpainter is not None:
-        inpainter = cast(StableDiffusionXLInpaintPipeline, inpainter).to(torch.device("cpu"))
-        inpainter = None
+        if isinstance(refiner, DiffusionPipeline):
+            inpainter.to(torch.device("cpu"))
+            inpainter = None
+
+    controlnet = await get_controlnet()
+
+    if controlnet is not None:
+        if isinstance(controlnet, DiffusionPipeline):
+            controlnet.to(torch.device("cpu"))
+            controlnet = None
+
+    pipe = await get_pipe()
+
+    if pipe is not None:
+        pipe.to("cpu")
+        pipe = None
+
+    # if isinstance(pipe, StableDiffusionXLPipeline):
+    #     pipe.unload_textual_inversion()
 
     if torch.backends.mps.is_available():
         torch.mps.empty_cache()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
 
-    print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
-    print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
+    preprocess = transforms.Compose([
+        # transforms.Resize((512, 512)),
+        transforms.ToTensor(),
+        transforms.Normalize([0.5], [0.5]),
+    ])
+
+    print(f"CUDA available: {torch.cuda.is_available()}")
+    if torch.cuda.is_available():
+        print(f"Device: {torch.cuda.get_device_name(0)}")
+        print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
+        print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
+
 
     model_path = os.path.join(os.getcwd(), "../models/sdxl-base-1.0")
     output_dir = os.path.join(os.getcwd(), f"../models/user/{collection}")
@@ -790,45 +951,31 @@ async def train(
 
     tokenizer_1 = CLIPTokenizer.from_pretrained(os.path.join(os.getcwd(), "../models/sdxl-base-1.0"), subfolder="tokenizer")
 
-    # tokenizer_1.config.torch_dtype = torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32
-
-    # print(f"tokenizer_1.config.torch_dtype: {tokenizer_1.config.torch_dtype}")
-
-    print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
-    print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
-
     tokenizer_2=CLIPTokenizer.from_pretrained(model_path, subfolder="tokenizer_2")
 
-    # tokenizer_2.config.torch_dtype = torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32
-
-    print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
-    print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
+    if torch.cuda.is_available():
+        print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
+        print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
 
     noise_scheduler = DDPMScheduler.from_pretrained(model_path, subfolder="scheduler")
 
-    print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
-    print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
+    if torch.cuda.is_available():
+        print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
+        print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
 
     text_encoder_1 = CLIPTextModel.from_pretrained(model_path, subfolder="text_encoder")
 
-    # text_encoder_1.text_model.config.torch_dtype = torch.float16 if torch.cuda.is_available() else torch.float32
-
-    print(f"text_encoder_1.text_model.config.torch_dtype: {text_encoder_1.text_model.config.torch_dtype}")
-
-    # print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
-    # print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
-
     text_encoder_2 = CLIPTextModelWithProjection.from_pretrained(model_path, subfolder="text_encoder_2")
 
-    # text_encoder_2.text_model.config.torch_dtype = torch.float16 if torch.cuda.is_available() else torch.float32
-
-    print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
-    print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
+    if torch.cuda.is_available():
+        print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
+        print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
 
     vae = AutoencoderKL.from_pretrained(model_path, subfolder="vae", torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32)
 
-    print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
-    print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
+    if torch.cuda.is_available():
+        print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
+        print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
 
     vae.eval()
     vae.use_slicing = True
@@ -837,30 +984,31 @@ async def train(
 
     unet = UNet2DConditionModel.from_pretrained(model_path, subfolder="unet", torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32, use_safetensors=True)
 
-    print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
-    print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
+    if torch.cuda.is_available():
+        print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
+        print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
 
     unet.eval()
     unet.enable_gradient_checkpointing()
 
-
-    initializer_token = re.search("(?<=<).+(?=>)", token)[0]
     placeholder_tokens = [token]
     tokenizer_1.add_tokens(placeholder_tokens)
     tokenizer_2.add_tokens(placeholder_tokens)
     token_ids = tokenizer_1.encode(initializer_token, add_special_tokens=False)
     token_ids_2 = tokenizer_2.encode(initializer_token, add_special_tokens=False)
 
-    print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
-    print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
+    if torch.cuda.is_available():
+        print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
+        print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
 
     initializer_token_id = token_ids[0]
     placeholder_token_ids = tokenizer_1.convert_tokens_to_ids(placeholder_tokens)
     initializer_token_id_2 = token_ids_2[0]
     placeholder_token_ids_2 = tokenizer_2.convert_tokens_to_ids(placeholder_tokens)
 
-    print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
-    print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
+    if torch.cuda.is_available():
+        print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
+        print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
 
     # old_weight_1 = text_encoder_1.get_input_embeddings().weight.detach().cpu().clone()
     # old_weight_2 = text_encoder_2.get_input_embeddings().weight.detach().cpu().clone()
@@ -868,14 +1016,16 @@ async def train(
     text_encoder_1.resize_token_embeddings(len(tokenizer_1))
     text_encoder_2.resize_token_embeddings(len(tokenizer_2))
 
-    print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
-    print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
+    if torch.cuda.is_available():
+        print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
+        print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
 
     token_embeds = text_encoder_1.get_input_embeddings().weight.data
     token_embeds_2 = text_encoder_2.get_input_embeddings().weight.data
 
-    print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
-    print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
+    if torch.cuda.is_available():
+        print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
+        print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
 
     with torch.no_grad():
 
@@ -887,50 +1037,6 @@ async def train(
 
         for token_id in placeholder_token_ids_2:
              token_embeds_2[token_id] = token_embeds_2[initializer_token_id_2].clone()
-        # Step 1: Resize (if not done already)
-        # text_encoder_1.resize_token_embeddings(len(tokenizer_1))
-        # text_encoder_2.resize_token_embeddings(len(tokenizer_2))
-        # Step 2: Get original weights
-        # old_weight_1 = text_encoder_1.get_input_embeddings().weight.detach().clone().to(device)
-        # old_weight_2 = text_encoder_2.get_input_embeddings().weight.detach().clone().to(device)
-
-        # Step 3: Create a fresh new Embedding layer on MPS
-        # new_embedding_1 = torch.nn.Embedding(old_weight_1.size(0), old_weight_1.size(1)).to(device)
-        # new_embedding_1.weight.data.copy_(old_weight_1)
-
-        # new_embedding_2 = torch.nn.Embedding(old_weight_2.size(0), old_weight_2.size(1)).to(device)
-        # new_embedding_2.weight.data.copy_(old_weight_2)
-
-        # Step 4: Assign the new embedding
-        # text_encoder_1.text_model.embeddings.token_embedding = new_embedding_1
-        # text_encoder_2.text_model.embeddings.token_embedding = new_embedding_2
-
-        # old_weight = text_encoder_1.text_model.embeddings.token_embedding.weight.detach().clone()
-        # from torch import nn
-        # new_embedding = nn.Embedding.from_pretrained(old_weight, freeze=False)
-        # text_encoder_1.text_model.embeddings.token_embedding = new_embedding
-
-        # weight_1 = text_encoder_1.get_input_embeddings().weight
-        # weight_2 = text_encoder_2.get_input_embeddings().weight
-
-        # print("Embedding weight device (1):", weight_1.device)
-        # print("Embedding weight device (2):", weight_2.device)
-
-        # weight_1[:old_weight_1.size(0)] = old_weight_1.to(device)
-        # weight_2[:old_weight_2.size(0)] = old_weight_2.to(device)
-
-        # for token_id in placeholder_token_ids:
-        #     embedding = weight_1[initializer_token_id].detach().clone().to(device)
-        #     weight_1[token_id].copy_(embedding)
-        #     print(f"Token {token_id} device:", weight_1[token_id].device)
-
-        # for token_id in placeholder_token_ids_2:
-        #     embedding2 = weight_2[initializer_token_id_2].detach().clone().to(device)
-        #     weight_2[token_id].copy_(embedding2)
-        #     print(f"Token {token_id} device:", weight_2[token_id].device)
-
-
-
 
     vae.requires_grad_(False)
     unet.requires_grad_(False)
@@ -945,9 +1051,6 @@ async def train(
     text_encoder_1.gradient_checkpointing_enable()
     text_encoder_2.gradient_checkpointing_enable()
 
-    # text_encoder_1.to(device, dtype=weight_dtype)
-    # text_encoder_2.to(device, dtype=weight_dtype)
-
     if is_xformers_available():
         import xformers
 
@@ -957,26 +1060,16 @@ async def train(
                 "xFormers 0.0.16 cannot be used for training in some GPUs. If you observe problems during training, please update xFormers to at least 0.0.17. See https://huggingface.co/docs/diffusers/main/en/optimization/xformers for more details."
             )
         unet.enable_xformers_memory_efficient_attention()
-    else:
-        raise ValueError("xformers is not available. Make sure it is installed correctly")
 
     optimizer_class = torch.optim.AdamW
-
-    # optimizer = optimizer_class([
-    #     text_encoder_1.text_model.embeddings.token_embedding.weight,
-    #     text_encoder_2.text_model.embeddings.token_embedding.weight,
-    # ],
-    # lr=lr,
-    # betas=betas,
-    # eps=eps,
-    # weight_decay=weight_decay
-    # )
 
     optimizer = optimizer_class(
         list(text_encoder_1.parameters()) + list(text_encoder_2.parameters()), lr=lr
     )
 
     placeholder_token = " ".join(tokenizer_1.convert_ids_to_tokens(placeholder_token_ids))
+    print(f"tokenizer_1.get_added_vocab(): {tokenizer_1.get_added_vocab()}")
+    print(f"placeholder_token: {placeholder_token}")
 
     json_path = os.path.join(os.getcwd(), f"../models/user/{collection}/captions.json")
 
@@ -985,48 +1078,48 @@ async def train(
     with open(json_path, mode="r") as f:
         captions = json.loads(f.read())
 
-    train_dataset = CustomPromptDataset(
-        captions=captions,
-        data_root=os.path.join(os.getcwd(), f"../models/user/{collection}/datasets/{token}"),
+
+    train_dataset = OneImageDataset(
+        image_data=image_data,
+        bbox=bbox,
+        placeholder_token=placeholder_token,
+        initializer_token=initializer_token,
+        collection=collection,
+        prompt=prompt,
+        repeats=repeats,
         tokenizer_1=tokenizer_1,
         tokenizer_2=tokenizer_2,
-        size=512,
-        repeats=100,
-        interpolation="bicubic",
-        flip_p=0.5,
-        set="train",
-        placeholder_token=placeholder_token,
-        center_crop=False,
+        mask_data=[]
     )
 
     train_dataloader = torch.utils.data.DataLoader(
         train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers
     )
 
-    print(f"accelerator.num_processes: {accelerator.num_processes}")
 
-    num_warmup_steps_for_scheduler = lr_warmup_steps * accelerator.num_processes if torch.cuda.is_available() else 1
 
-    num_training_steps_for_scheduler = max_train_steps * accelerator.num_processes if torch.cuda.is_available() else num_processes
+    if torch.cuda.is_available():
+        print(f"accelerator.num_processes: {accelerator.num_processes}")
 
-    lr_scheduler = get_scheduler(
-        "constant_with_warmup",
-        optimizer=optimizer,
-        num_warmup_steps=num_warmup_steps_for_scheduler,
-        num_training_steps=num_training_steps,
-    )
+    # num_warmup_steps_for_scheduler = lr_warmup_steps * accelerator.num_processes if torch.cuda.is_available() else 1
 
-    text_encoder_1.train()
-    text_encoder_2.train()
+    # num_training_steps_for_scheduler = max_train_steps * accelerator.num_processes if torch.cuda.is_available() else num_processes
 
-    print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
-    print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
+    # lr_scheduler = get_scheduler(
+    #     "constant_with_warmup",
+    #     optimizer=optimizer,
+    #     num_warmup_steps=num_warmup_steps_for_scheduler,
+    #     num_training_steps=num_training_steps,
+    # )
+
+    # text_encoder_1.train()
+    # text_encoder_2.train()
+
 
     # text_encoder_1 = text_encoder_1.to(dtype=torch.float16, device=device)
     # text_encoder_2 = text_encoder_2.to(dtype=torch.float16, device=device)
 
     if torch.cuda.is_available():
-
 
         optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
             optimizer, train_dataloader, lr_scheduler
@@ -1040,22 +1133,148 @@ async def train(
         elif accelerator.mixed_precision == "bf16":
             weight_dtype = torch.bfloat16
 
-    # unet.to(accelerator.device if (torch.cuda.is_available()) else device, dtype=weight_dtype)
-
-    # print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
-    # print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
-
-    # vae.to(accelerator.device if (torch.cuda.is_available()) else device, dtype=weight_dtype)
-
-    # print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
-    # print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
-
-    # text_encoder_2.to(accelerator.device if (torch.cuda.is_available()) else device, dtype=weight_dtype)
-
-    print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
-    print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
 
     num_update_steps_per_epoch = math.ceil(len(train_dataloader) / gradient_accumulation_steps)
+
+    checkpoint = None
+    global_step = 0
+    first_epoch = 0
+
+    if resume_from_checkpoint != "latest":
+        path = os.path.basename(resume_from_checkpoint)
+    else:
+        # Get the most recent checkpoint
+        dirs = os.listdir(output_dir)
+        print(f"dirs: {dirs}")
+        checkpoints = [d for d in filter(lambda f: re.match(f"{collection}-train-state-\\d+?\\.pt", f), dirs)]
+
+        checkpoints = sorted(checkpoints, key=lambda x: int(x.split("-")[3].split(".")[0]))
+        print(f"dirs: {dirs}")
+        path = None
+
+        if len(checkpoints) >= 1:
+            path = checkpoints[-1]
+            steps = int(path.split("-")[3].split(".")[0])
+            tensors = [os.path.join(output_dir, d) for d in filter(lambda f: re.match(f"{collection}(_2)?-steps-{steps}\\.safetensors", f), dirs)]
+            print(f"tensors: {tensors}")
+            sd1_path = [p for p in filter(lambda n: re.match(f"{collection}(?!_2)", n.split('/')[-1]), tensors)][0]
+            print(f"sd1_path: {sd1_path}")
+            sd1 = load_file(sd1_path)
+            sd2_path = [p for p in filter(lambda n: re.match(f"{collection}_2", n.split('/')[-1]), tensors)][0]
+            print(f"sd2_path: {sd2_path}")
+            sd2 = load_file(sd2_path)
+            print(f"sd1: {[f'{t}: {sd1[t].shape}' for t in sd1.keys()]}")
+            print(f"sd2: {[f'{t}: {sd2[t].shape}' for t in sd2.keys()]}")
+
+            print(f"placeholder_token: {placeholder_token}")
+
+
+            vec1 = text_encoder_1.get_input_embeddings().weight[tokenizer_1.convert_tokens_to_ids(initializer_token)]
+
+            vec2 = text_encoder_2.get_input_embeddings().weight[tokenizer_2.convert_tokens_to_ids(initializer_token)]
+
+            print(f"vec1.shape: {vec1.shape} vec2.shape: {vec2.shape}")
+
+            if token in sd1:
+                vec1 = sd1[token]
+
+            if token in sd2:
+                vec2 = sd2[token]
+
+            print(f"vec1.shape: {vec1.shape} vec2.shape: {vec2.shape}")
+
+            for tk in (tokenizer_1, tokenizer_2):
+                    if tk.convert_tokens_to_ids(token) == tk.unk_token_id:
+                        tk.add_tokens([token])
+
+
+            text_encoder_1.resize_token_embeddings(len(tokenizer_1))
+            text_encoder_2.resize_token_embeddings(len(tokenizer_2))
+
+            ids1 = tokenizer_1.convert_tokens_to_ids(token)
+            ids2 = tokenizer_2.convert_tokens_to_ids(token)
+
+            embeddings_1 = text_encoder_1.get_input_embeddings().weight
+            embeddings_2 = text_encoder_2.get_input_embeddings().weight
+
+            print(f"embeddings_1.shape: {embeddings_1.shape} embeddings_2,shape: {embeddings_2.shape}")
+
+            vec1 = vec1.to(dtype=embeddings_1.dtype, device=embeddings_1.device)
+            vec2 = vec2.to(dtype=embeddings_2.dtype, device=embeddings_2.device)
+
+            print(f"vec1.shape: {vec1.shape} vec2.shape: {vec2.shape}")
+
+            if vec1.ndim == 2 and vec1.shape[0] == 1:   # (1, dim) or (dim,)
+                vec1 = vec1[0]
+            elif vec1.ndim == 1:
+                pass
+            else:
+                raise ValueError("This loader handles single-vector TI; got shape %r" % (tuple(vec1.shape),))
+            with torch.no_grad():
+                print(f"vec1.shape: {vec1.shape}")
+                embeddings_1[ids1] = vec1
+
+            if vec2.ndim == 2 and vec2.shape[0] == 1:   # (1, dim) or (dim,)
+                vec2 = vec2[0]
+            elif vec2.ndim == 1:
+                pass
+            else:
+                raise ValueError("This loader handles single-vector TI; got shape %r" % (tuple(vec2.shape),))
+            with torch.no_grad():
+                embeddings_2[ids2] = vec2
+
+
+    if path is None :
+        print(
+            f"Checkpoint '{resume_from_checkpoint}' does not exist. Starting a new training run."
+        )
+        resume_from_checkpoint = None
+        initial_global_step = 0
+    else:
+        print(f"Resuming from checkpoint {path}")
+
+        if torch.cuda.is_available():
+            accelerator.load_state(os.path.join(output_dir, path))
+            global_step = int(path.split("-")[2].split(".")[0])
+
+            print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
+            print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
+
+            initial_global_step = global_step
+            first_epoch = global_step // num_update_steps_per_epoch
+        else:
+            checkpoint = torch.load(os.path.join(output_dir, path), map_location=device)
+
+            global_step = checkpoint.get("step", 0)
+            initial_global_step = global_step
+            max_train_steps = max_train_steps + global_step
+
+            text_encoder_1.load_state_dict(checkpoint["text_encoder"])
+
+
+
+            optimizer = torch.optim.AdamW(list(text_encoder_1.parameters()) + list(text_encoder_2.parameters()), lr=lr)
+
+            optimizer.load_state_dict(checkpoint["optimizer"])
+
+            first_epoch = global_step // num_update_steps_per_epoch
+
+    num_warmup_steps_for_scheduler = lr_warmup_steps * accelerator.num_processes if torch.cuda.is_available() else 1
+
+    num_training_steps_for_scheduler = max_train_steps * accelerator.num_processes if torch.cuda.is_available() else num_processes
+
+    lr_scheduler = get_scheduler(
+        "constant_with_warmup",
+        optimizer=optimizer,
+        num_warmup_steps=num_warmup_steps_for_scheduler,
+        num_training_steps=num_training_steps,
+    )
+
+    if checkpoint is not None:
+        lr_scheduler.load_state_dict(checkpoint["lr_scheduler"])
+
+    text_encoder_1.train()
+    text_encoder_2.train()
 
     num_train_epochs = math.ceil(max_train_steps / num_update_steps_per_epoch)
 
@@ -1068,50 +1287,6 @@ async def train(
     print(f"  Total train batch size (w. parallel, distributed & accumulation) = {total_batch_size}")
     print(f"  Gradient Accumulation steps = {gradient_accumulation_steps}")
     print(f"  Total optimization steps = {max_train_steps}")
-    global_step = 0
-    first_epoch = 0
-
-    if resume_from_checkpoint != "latest":
-        path = os.path.basename(resume_from_checkpoint)
-    else:
-        # Get the most recent checkpoint
-        dirs = os.listdir(output_dir)
-        dirs = [d for d in dirs if d.startswith("checkpoint")]
-        dirs = sorted(dirs, key=lambda x: int(x.split("-")[1]))
-        path = dirs[-1] if len(dirs) > 0 else None
-
-    if path is None:
-        print(
-            f"Checkpoint '{resume_from_checkpoint}' does not exist. Starting a new training run."
-        )
-        resume_from_checkpoint = None
-        initial_global_step = 0
-    else:
-        print(f"Resuming from checkpoint {path}")
-
-        if torch.cuda.is_available():
-            accelerator.load_state(os.path.join(output_dir, path))
-            global_step = int(path.split("-")[1])
-
-            print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
-            print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
-
-            initial_global_step = global_step
-            first_epoch = global_step // num_update_steps_per_epoch
-        else:
-            checkpoint = torch.load(os.path.join(output_dir, path),map_location=device)
-
-            global_step = int(path.split("-")[1])
-
-            text_encoder_1.load_state_dict(checkpoint["model"])
-            optimizer = torch.optim.AdamW(text_encoder_1.parameters(), lr=lr)
-            optimizer.load_state_dict(checkpoint["optimizer"])
-            lr_scheduler.load_state_dict(checkpoint["scheduler"])
-
-            global_step = checkpoint.get("global_step", 0)
-            initial_global_step = global_step
-
-            first_epoch = global_step // num_update_steps_per_epoch
 
 
     progress_bar = tqdm(
@@ -1134,99 +1309,222 @@ async def train(
 
     else:
         orig_embeds_params = text_encoder_1.get_input_embeddings().weight.data.clone()
-
-        print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
-        print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
-
         orig_embeds_params_2 = text_encoder_2.get_input_embeddings().weight.data.clone()
 
-        print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
-        print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
-
-    # with torch.no_grad():
-    #     dummy_input = torch.tensor([placeholder_token_ids[0]], dtype=torch.long, device=device).to(device)
-    #     dummy_mask = torch.tensor([[1]], dtype=torch.long, device=device).to(device)
-    #     _ = text_encoder_1(input_ids=dummy_input, attention_mask=dummy_mask, output_hidden_states=True)
-
-    # for param in text_encoder_1.parameters():
-    #     param.requires_grad = False
-
-    # for param in text_encoder_2.parameters():
-    #     param.requires_grad = False
-
-    text_encoder_1.get_input_embeddings().weight.requires_grad = True  # Just the embeddings
+    text_encoder_1.get_input_embeddings().weight.requires_grad = True  #
     text_encoder_2.get_input_embeddings().weight.requires_grad = True
 
     print(f"dir(text_encoder_1.text_model.config): {dir(text_encoder_1.text_model.config)}")
 
-    print(f"accelerator.device: {accelerator.device}")
+    if torch.cuda.is_available():
+        print(f"accelerator.device: {accelerator.device}")
 
-    # vae.to(device)
     vae.enable_tiling()
     vae.enable_slicing()
-
-    # unet.to(device)
-    # text_encoder_1.to(device)
-    # text_encoder_2.to(device)
 
     gc.collect()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
+    if torch.backends.mps.is_available():
+        torch.mps.empty_cache()
 
     to_pil = T.ToPILImage()
 
+    save_steps = min(max_train_steps // 2, 50)
+    print(f"text_encoder_1.get_added_vocab(): {tokenizer_1.get_added_vocab()}")
 
     for epoch in range(first_epoch, num_train_epochs):
         text_encoder_1.train()
         text_encoder_2.train()
 
-        print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
-        print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
+        if torch.cuda.is_available():
+            print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
+            print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
 
         gc.collect()
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
-
-        for step, batch in enumerate(train_dataloader):
-            gc.collect()
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
+        if torch.backends.mps.is_available():
+            torch.mps.empty_cache()
 
 
-            images = batch["pixel_values"]
-            images = images.squeeze(0)
-            print(f"images.size(): {images.size()}")
-            # images = torch.Tensor.numpy(images)
-            print(f"images.shape: {images.shape}")
-            images = to_pil(images)
-            images = preprocess(images)
+        try:
+            for step, batch in enumerate(train_dataloader):
+                gc.collect()
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                if torch.backends.mps.is_available():
+                    torch.mps.empty_cache()
 
 
-            # print(f"image_pil: {image_pil}")
-            # image_resized = image_pil.resize((512, 512))
-            # to_tensor = T.ToTensor()
-            # image_tensor = to_tensor(image_resized)
-            # print(f"image_tensor.size(): {image_tensor.size()}")
-            # image_tensor = image_tensor.unsqueeze(0).to(device, dtype=torch.float16)
-            # print(f"image_tensor.size(): {image_tensor.size()}")
-            #
+                images = batch["pixel_values"]
+                images = images.squeeze(0)
+                print(f"images.size(): {images.size()}")
+                # images = torch.Tensor.numpy(images)
+                print(f"images.shape: {images.shape}")
+                images = to_pil(images)
+                images = preprocess(images)
 
-            if torch.cuda.is_available():
-                with accelerator.accumulate([text_encoder_1, text_encoder_2]):
-                    # Convert images to latent space
-                    images = images.unsqueeze(0)
-                    latents = vae.encode(images.to(dtype=torch.float16)).latent_dist.sample()
 
-                    print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
-                    print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
+                # print(f"image_pil: {image_pil}")
+                # image_resized = image_pil.resize((512, 512))
+                # to_tensor = T.ToTensor()
+                # image_tensor = to_tensor(image_resized)
+                # print(f"image_tensor.size(): {image_tensor.size()}")
+                # image_tensor = image_tensor.unsqueeze(0).to(device, dtype=torch.float16)
+                # print(f"image_tensor.size(): {image_tensor.size()}")
+                #
 
+                if torch.cuda.is_available():
+                    with accelerator.accumulate([text_encoder_1, text_encoder_2]):
+                        # Convert images to latent space
+                        images = images.unsqueeze(0)
+                        latents = vae.encode(images.to(dtype=torch.float16)).latent_dist.sample()
+
+                        print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
+                        print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
+
+                        latents = latents * vae.config.scaling_factor
+
+                        # Sample noise that we'll add to the latents
+                        noise = torch.randn_like(latents)
+                        bsz = latents.shape[0]
+                        # Sample a random timestep for each image
+                        timesteps = torch.randint(0, noise_scheduler.config.num_train_timesteps, (bsz,))
+                        timesteps = timesteps.long()
+
+                        # Add noise to the latents according to the noise magnitude at each timestep
+                        # (this is the forward diffusion process)
+                        noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
+
+                        # Get the text embedding for conditioning
+                        encoder_hidden_states_1 = (
+                            text_encoder_1(batch["input_ids_1"], output_hidden_states=True)
+                            .hidden_states[-2]
+                        )
+
+                        print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
+                        print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
+
+                        encoder_output_2 = text_encoder_2(batch["input_ids_2"], output_hidden_states=True)
+                        encoder_hidden_states_2 = encoder_output_2.hidden_states[-2]
+
+                        print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
+                        print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
+
+                        original_size = [
+                            (batch["original_size"][0][i].item(), batch["original_size"][1][i].item())
+                            for i in range(train_batch_size)
+                        ]
+                        crop_top_left = [
+                            (batch["crop_top_left"][0][i].item(), batch["crop_top_left"][1][i].item())
+                            for i in range(train_batch_size)
+                        ]
+                        target_size = (resolution, resolution)
+                        add_time_ids = torch.cat(
+                            [
+                                torch.tensor(original_size[i] + crop_top_left[i] + target_size)
+                                for i in range(train_batch_size)
+                            ]
+                        )
+
+                        print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
+                        print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
+
+                        added_cond_kwargs = {"text_embeds": encoder_output_2[0], "time_ids": add_time_ids}
+                        encoder_hidden_states = torch.cat([encoder_hidden_states_1, encoder_hidden_states_2], dim=-1)
+
+                        # Predict the noise residual
+                        model_pred = unet(
+                            noisy_latents, timesteps, encoder_hidden_states, added_cond_kwargs=added_cond_kwargs
+                        ).sample
+
+                        print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
+                        print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
+
+                        # Get the target for loss depending on the prediction type
+                        if noise_scheduler.config.prediction_type == "epsilon":
+                            target = noise
+                        elif noise_scheduler.config.prediction_type == "v_prediction":
+                            target = noise_scheduler.get_velocity(latents, noise, timesteps)
+                        else:
+                            raise ValueError(f"Unknown prediction type {noise_scheduler.config.prediction_type}")
+
+                        loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
+
+                        accelerator.backward(loss)
+
+                        print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
+                        print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
+                        for model_name, model in [("text_encoder_1", text_encoder_1),
+                                                ("text_encoder_2", text_encoder_2),
+                                                ("unet", unet)]:
+                            for name, param in model.named_parameters():
+                                if param.grad is not None and torch.isnan(param.grad).any():
+                                    print(f"NaN in gradients of {name}")
+
+                        optimizer.step()
+                        lr_scheduler.step()
+                        optimizer.zero_grad()
+
+                        print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
+                        print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
+
+                        # Let's make sure we don't update any embedding weights besides the newly added token
+                        index_no_updates = torch.ones((len(tokenizer_1),), dtype=torch.bool)
+                        index_no_updates[min(placeholder_token_ids) : max(placeholder_token_ids) + 1] = False
+                        index_no_updates_2 = torch.ones((len(tokenizer_2),), dtype=torch.bool)
+                        index_no_updates_2[min(placeholder_token_ids_2) : max(placeholder_token_ids_2) + 1] = False
+
+                        with torch.no_grad():
+                            accelerator.unwrap_model(text_encoder_1).get_input_embeddings().weight[index_no_updates] = (
+                                orig_embeds_params[index_no_updates]
+                            )
+                            accelerator.unwrap_model(text_encoder_2).get_input_embeddings().weight[index_no_updates_2] = (
+                                orig_embeds_params_2[index_no_updates_2]
+                            )
+                        if accelerator.sync_gradients:
+                            images = []
+                            progress_bar.update(1)
+                            global_step += 1
+                            if global_step % save_steps == 0:
+                                weight_name = f"learned_embeds-steps-{global_step}.safetensors"
+                                save_path = os.path.join(output_dir, weight_name)
+                                save_progress(
+                                    text_encoder_1,
+                                    placeholder_token_ids,
+                                    accelerator,
+                                    placeholder_token,
+                                    save_path,
+                                    safe_serialization=True,
+                                )
+                                weight_name = f"learned_embeds_2-steps-{global_step}.safetensors"
+                                save_path = os.path.join(output_dir, weight_name)
+                                save_progress(
+                                    text_encoder_2,
+                                    placeholder_token_ids_2,
+                                    accelerator,
+                                    placeholder_token,
+                                    save_path,
+                                    safe_serialization=True,
+                                )
+                        logs = {"loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0]}
+                        progress_bar.set_postfix(**logs)
+                        accelerator.log(logs, step=global_step)
+
+                        if global_step >= max_train_steps:
+                            break
+                    accelerator.wait_for_everyone()
+                    accelerator.end_training()
+                else:
+                    latents = vae.encode(batch["pixel_values"]).latent_dist.sample().detach()
                     latents = latents * vae.config.scaling_factor
 
                     # Sample noise that we'll add to the latents
                     noise = torch.randn_like(latents)
                     bsz = latents.shape[0]
                     # Sample a random timestep for each image
-                    timesteps = torch.randint(0, noise_scheduler.config.num_train_timesteps, (bsz,))
+                    timesteps = torch.randint(0, noise_scheduler.config.num_train_timesteps, (bsz,), device=latents.device)
                     timesteps = timesteps.long()
 
                     # Add noise to the latents according to the noise magnitude at each timestep
@@ -1239,24 +1537,25 @@ async def train(
                         .hidden_states[-2]
                     )
 
-                    print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
-                    print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
-
                     encoder_output_2 = text_encoder_2(batch["input_ids_2"], output_hidden_states=True)
+
                     encoder_hidden_states_2 = encoder_output_2.hidden_states[-2]
 
-                    print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
-                    print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
-
+                    print(f"batch[\"original_size\"][0]: {batch["original_size"][0]}")
+                    print(f"batch[\"original_size\"][1]: {batch["original_size"][1]}")
                     original_size = [
-                        (batch["original_size"][0][i].item(), batch["original_size"][1][i].item())
+                        (batch["original_size"][i].item(), batch["original_size"][i].item())
                         for i in range(train_batch_size)
                     ]
+                    print(f"original_size[0]: {original_size[0]} type(original_size[0]: {type(original_size[0])}")
                     crop_top_left = [
-                        (batch["crop_top_left"][0][i].item(), batch["crop_top_left"][1][i].item())
+                        (batch["crop_top_left"][i].item(), batch["crop_top_left"][i].item())
                         for i in range(train_batch_size)
                     ]
                     target_size = (resolution, resolution)
+                    print(f"target_size: {target_size}")
+                    print(f"type(target_size):{type(target_size)}")
+                    print(f"target_size[0]: {target_size[0]} target_size[1]: {target_size[1]}")
                     add_time_ids = torch.cat(
                         [
                             torch.tensor(original_size[i] + crop_top_left[i] + target_size)
@@ -1264,19 +1563,15 @@ async def train(
                         ]
                     )
 
-                    print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
-                    print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
-
                     added_cond_kwargs = {"text_embeds": encoder_output_2[0], "time_ids": add_time_ids}
                     encoder_hidden_states = torch.cat([encoder_hidden_states_1, encoder_hidden_states_2], dim=-1)
-
+                    print(f"encoder_hidden_states.shape: {encoder_hidden_states.shape}")
+                    print(f"noisy_latents.shape: {noisy_latents.shape}")
+                    print(f"timesteps: {timesteps}")
                     # Predict the noise residual
-                    model_pred = unet(
-                        noisy_latents, timesteps, encoder_hidden_states, added_cond_kwargs=added_cond_kwargs
+                    # print(f"unet.weight.shape: {unet.weight.shape}")
+                    model_pred = unet(noisy_latents, timesteps, encoder_hidden_states, added_cond_kwargs=added_cond_kwargs
                     ).sample
-
-                    print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
-                    print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
 
                     # Get the target for loss depending on the prediction type
                     if noise_scheduler.config.prediction_type == "epsilon":
@@ -1288,184 +1583,21 @@ async def train(
 
                     loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
 
-                    accelerator.backward(loss)
+                    print(f"loss: {loss}")
 
-                    print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
-                    print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
-                    for model_name, model in [("text_encoder_1", text_encoder_1),
-                                              ("text_encoder_2", text_encoder_2),
-                                              ("unet", unet)]:
-                        for name, param in model.named_parameters():
-                            if param.grad is not None and torch.isnan(param.grad).any():
-                                print(f"NaN in gradients of {name}")
+                    loss.backward()
 
                     optimizer.step()
                     lr_scheduler.step()
                     optimizer.zero_grad()
 
-                    print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
-                    print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
-
-                    # Let's make sure we don't update any embedding weights besides the newly added token
                     index_no_updates = torch.ones((len(tokenizer_1),), dtype=torch.bool)
                     index_no_updates[min(placeholder_token_ids) : max(placeholder_token_ids) + 1] = False
                     index_no_updates_2 = torch.ones((len(tokenizer_2),), dtype=torch.bool)
                     index_no_updates_2[min(placeholder_token_ids_2) : max(placeholder_token_ids_2) + 1] = False
 
                     with torch.no_grad():
-                        accelerator.unwrap_model(text_encoder_1).get_input_embeddings().weight[index_no_updates] = (
-                            orig_embeds_params[index_no_updates]
-                        )
-                        accelerator.unwrap_model(text_encoder_2).get_input_embeddings().weight[index_no_updates_2] = (
-                            orig_embeds_params_2[index_no_updates_2]
-                        )
-                    if accelerator.sync_gradients:
-                        images = []
-                        progress_bar.update(1)
-                        global_step += 1
-                        if global_step % save_steps == 0:
-                            weight_name = f"learned_embeds-steps-{global_step}.safetensors"
-                            save_path = os.path.join(output_dir, weight_name)
-                            save_progress(
-                                text_encoder_1,
-                                placeholder_token_ids,
-                                accelerator,
-                                placeholder_token,
-                                save_path,
-                                safe_serialization=True,
-                            )
-                            weight_name = f"learned_embeds_2-steps-{global_step}.safetensors"
-                            save_path = os.path.join(output_dir, weight_name)
-                            save_progress(
-                                text_encoder_2,
-                                placeholder_token_ids_2,
-                                accelerator,
-                                placeholder_token,
-                                save_path,
-                                safe_serialization=True,
-                            )
-                    logs = {"loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0]}
-                    progress_bar.set_postfix(**logs)
-                    accelerator.log(logs, step=global_step)
 
-                    if global_step >= max_train_steps:
-                        break
-                accelerator.wait_for_everyone()
-                accelerator.end_training()
-            else:
-                latents = vae.encode(batch["pixel_values"]).latent_dist.sample().detach()
-                latents = latents * vae.config.scaling_factor
-
-                # Sample noise that we'll add to the latents
-                noise = torch.randn_like(latents)
-                bsz = latents.shape[0]
-                # Sample a random timestep for each image
-                timesteps = torch.randint(0, noise_scheduler.config.num_train_timesteps, (bsz,), device=latents.device)
-
-                print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
-                print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
-
-                timesteps = timesteps.long()
-
-                # Add noise to the latents according to the noise magnitude at each timestep
-                # (this is the forward diffusion process)
-                noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
-
-                # Get the text embedding for conditioning
-                encoder_hidden_states_1 = (
-                    text_encoder_1(batch["input_ids_1"], output_hidden_states=True)
-                    .hidden_states[-2]
-                )
-
-                print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
-                print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
-
-                encoder_output_2 = text_encoder_2(batch["input_ids_2"], output_hidden_states=True)
-
-                print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
-                print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
-
-
-                encoder_hidden_states_2 = encoder_output_2.hidden_states[-2]
-
-                print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
-                print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
-
-                print(f"batch[\"original_size\"][0]: {batch["original_size"][0]}")
-                print(f"batch[\"original_size\"][1]: {batch["original_size"][1]}")
-                original_size = [
-                    (batch["original_size"][i].item(), batch["original_size"][i].item())
-                    for i in range(train_batch_size)
-                ]
-                print(f"original_size[0]: {original_size[0]} type(original_size[0]: {type(original_size[0])}")
-                crop_top_left = [
-                    (batch["crop_top_left"][i].item(), batch["crop_top_left"][i].item())
-                    for i in range(train_batch_size)
-                ]
-                target_size = (resolution, resolution)
-                print(f"target_size: {target_size}")
-                print(f"type(target_size):{type(target_size)}")
-                print(f"target_size[0]: {target_size[0]} target_size[1]: {target_size[1]}")
-                add_time_ids = torch.cat(
-                    [
-                        torch.tensor(original_size[i] + crop_top_left[i] + target_size)
-                        for i in range(train_batch_size)
-                    ]
-                )
-
-                print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
-                print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
-
-                added_cond_kwargs = {"text_embeds": encoder_output_2[0], "time_ids": add_time_ids}
-                encoder_hidden_states = torch.cat([encoder_hidden_states_1, encoder_hidden_states_2], dim=-1)
-                print(f"encoder_hidden_states.shape: {encoder_hidden_states.shape}")
-                print(f"noisy_latents.shape: {noisy_latents.shape}")
-                print(f"timesteps: {timesteps}")
-                # Predict the noise residual
-                # print(f"unet.weight.shape: {unet.weight.shape}")
-                model_pred = unet(noisy_latents, timesteps, encoder_hidden_states, added_cond_kwargs=added_cond_kwargs
-                ).sample
-
-                # Get the target for loss depending on the prediction type
-                if noise_scheduler.config.prediction_type == "epsilon":
-                    target = noise
-                elif noise_scheduler.config.prediction_type == "v_prediction":
-                    target = noise_scheduler.get_velocity(latents, noise, timesteps)
-                else:
-                    raise ValueError(f"Unknown prediction type {noise_scheduler.config.prediction_type}")
-
-                loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
-
-                accelerator.backward(loss) if torch.cuda.is_avalable() else loss.backward()
-
-                print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
-                print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
-
-                optimizer.step()
-                lr_scheduler.step()
-                optimizer.zero_grad()
-
-                print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
-                print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
-
-                index_no_updates = torch.ones((len(tokenizer_1),), dtype=torch.bool)
-                index_no_updates[min(placeholder_token_ids) : max(placeholder_token_ids) + 1] = False
-                index_no_updates_2 = torch.ones((len(tokenizer_2),), dtype=torch.bool)
-                index_no_updates_2[min(placeholder_token_ids_2) : max(placeholder_token_ids_2) + 1] = False
-
-                with torch.no_grad():
-                    if torch.cuda.is_available():
-                        accelerator.unwrap_model(text_encoder_1).get_input_embeddings().weight[index_no_updates] = (
-                            orig_embeds_params[index_no_updates]
-                        )
-                        accelerator.unwrap_model(text_encoder_2).get_input_embeddings().weight[index_no_updates_2] = (
-                            orig_embeds_params_2[index_no_updates_2]
-                        )
-
-                        print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
-                        print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
-
-                    else:
                         text_encoder_1.get_input_embeddings().weight[index_no_updates] = (
                             orig_embeds_params[index_no_updates]
                         )
@@ -1473,52 +1605,79 @@ async def train(
                             orig_embeds_params_2[index_no_updates_2]
                         )
 
+                images = []
+                progress_bar.update(1)
+                global_step += 1
+                if global_step % save_steps == 0:
 
-                if torch.cuda.is_available():
-                    if accelerator.sync_gradients:
-                        images = []
-                        progress_bar.update(1)
-                        global_step += 1
-                        if global_step % args.save_steps == 0:
-                            weight_name = f"{token}.safetensors"
-                            save_path = os.path.join(output_dir, weight_name)
-                            save_progress(
-                                text_encoder_1,
-                                placeholder_token_ids,
-                                placeholder_token,
-                                save_path=save_path,
-                                accelerator=accelerator,
-                                safe_serialization=True,
-                            )
-                            weight_name = f"{token}_2.safetensors"
-                            save_path = os.path.join(output_dir, weight_name)
-                            save_progress(
-                                text_encoder_2,
-                                placeholder_token_ids_2,
-                                placeholder_token,
-                                save_path=save_path,
-                                accelerator=accelerator,
-                                safe_serialization=True,
-                            )
-                    accelerator.wait_for_everyone()
-
-                    print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
-                    print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
-
-                    accelerator.end_training()
-
-                    print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
-                    print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
-
-                logs = {"loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0]}
-                progress_bar.set_postfix(**logs)
-
-                print(f"Global step: {global_step}, loss: {loss.detach().item():.4f}")
-
-                if global_step >= max_train_steps:
-                    break
+                    save_checkpoint(tokenizer=tokenizer_1, tokenizer_2=tokenizer_2, text_encoder=text_encoder_1, text_encoder_2=text_encoder_2, token=token, weight_name=collection, output_dir=output_dir, step= global_step)
 
 
+                    torch.save({
+                        "step": global_step,
+                        "token": token,
+                        "text_encoder": text_encoder_1.state_dict(),
+                        "text_encoder_2": text_encoder_2.state_dict(),
+                        "optimizer": optimizer.state_dict(),
+                        "lr_scheduler": lr_scheduler.state_dict() if lr_scheduler else None,
+                    }, os.path.join(output_dir, f"{collection}-train-state-{global_step}.pt"))
+
+
+                    logs = {"loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0]}
+                    progress_bar.set_postfix(**logs)
+
+                    print(f"Global step: {global_step}, loss: {loss.detach().item():.4f}")
+
+                    if global_step >= max_train_steps:
+                        break
+
+        except Exception as e:
+
+            save_checkpoint(tokenizer=tokenizer_1, tokenizer_2=tokenizer_2, text_encoder=text_encoder_1, text_encoder_2=text_encoder_2, token=token, weight_name=collection, output_dir=output_dir, step=global_step)
+
+            torch.save({
+                "step": global_step,
+                "token": token,
+                "text_encoder": text_encoder_1.state_dict(),
+                "text_encoder_2": text_encoder_2.state_dict(),
+                "optimizer": optimizer.state_dict(),
+                "lr_scheduler": lr_scheduler.state_dict() if lr_scheduler else None,
+            }, os.path.join(output_dir, f"{collection}-train-state-{global_step}.pt"))
+
+            raise e
+
+
+        save_checkpoint(tokenizer=tokenizer_1, tokenizer_2=tokenizer_2, text_encoder=text_encoder_1, text_encoder_2=text_encoder_2, token=token, weight_name=collection, output_dir=output_dir, step=global_step)
+
+        torch.save({
+            "step": global_step,
+            "token": token,
+            "text_encoder": text_encoder_1.state_dict(),
+            "text_encoder_2": text_encoder_2.state_dict(),
+            "optimizer": optimizer.state_dict(),
+            "lr_scheduler": lr_scheduler.state_dict() if lr_scheduler else None,
+        }, os.path.join(output_dir, f"{collection}-train-state-{global_step}.pt"))
+
+        weight_name = f"{collection}.safetensors"
+        save_path = os.path.join(output_dir, weight_name)
+        save_progress(
+            text_encoder_1,
+            placeholder_token_ids,
+            placeholder_token,
+            save_path=save_path,
+            accelerator=accelerator,
+            safe_serialization=True,
+        )
+        weight_name = f"{collection}_2.safetensors"
+        save_path = os.path.join(output_dir, weight_name)
+        save_progress(
+            text_encoder_2,
+            placeholder_token_ids_2,
+            placeholder_token,
+            save_path=save_path,
+            accelerator=accelerator,
+            safe_serialization=True,
+        )
 
         # pipe.load_textual_inversion(os.path.join(output_dir, token))
         # if refiner is not None:

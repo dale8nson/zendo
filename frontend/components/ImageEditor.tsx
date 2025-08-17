@@ -10,6 +10,7 @@ import {
   setMaskIndex,
   setSelectedMaskData,
   setMaskBox,
+  setSelectionBox,
   setScaledSelectionBox,
   setObjectCaption,
   // setMasks,
@@ -91,6 +92,18 @@ export const ImageEditor = () => {
     (state) => state.imageEditor.selectedImage
   )
 
+  const tokenize = async (text: string) => {
+    const response = await fetch('http://127.0.0.1:8000/api/tokenize', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ text }),
+    })
+    const { tokens } = await response.json()
+    return tokens
+  }
+
   const editorCanvasStatus = useAppSelector((state) => state.imageEditor.status)
   const maskIndex = useAppSelector((state) => state.imageEditor.maskIndex)
   const selectedMaskData = useAppSelector((state) => state.imageEditor.selectedMaskData)
@@ -122,14 +135,17 @@ export const ImageEditor = () => {
   const editorCanvasData = useAppSelector((state) => state.imageEditor.editorCanvasData)
   const maskData = useAppSelector((state) => state.imageEditor.maskData)
   const selectedMasks = useAppSelector((state) => state.imageEditor.selectedMasks)
+  const selectionBox = useAppSelector((state) => state.imageEditor.selectionBox)
 
   const dispatch = useAppDispatch()
+
+  const [tokenCount, setTokenCount] = useState(0)
 
   const queryClient = useQueryClient()
 
   const captionRef = useRef(null)
 
-  const selectionBox = useRef([0, 0, 0, 0])
+  // const selectionBox = useRef([0, 0, 0, 0])
   const pointerDownRef = useRef(false)
   const observerRef = useRef<any>({})
   const contextMenuOpen = useRef(false)
@@ -243,7 +259,7 @@ export const ImageEditor = () => {
     const ctx = canv.getContext('2d')
     if (!ctx) return
 
-    const [x, y, w, h] = selectionBox.current
+    const [x, y, w, h] = selectionBox
 
     if (selectionBoxVisible) {
       ctx.strokeStyle = 'white'
@@ -267,7 +283,7 @@ export const ImageEditor = () => {
     const x = e.clientX - bx
     const y = e.clientY - by
     pointerCanvasCoords.current = [x, y, 0, 0]
-    selectionBox.current = [x, y, 0, 0]
+    dispatch(setSelectionBox([x, y, 0, 0]))
     setSelectionBoxVisible(true)
   }
 
@@ -283,7 +299,7 @@ export const ImageEditor = () => {
     const canv = canvasRef.current as HTMLCanvasElement
 
     if (pointerDownRef.current && !contextMenuOpen.current) {
-      const [x1, y1] = selectionBox.current
+      const [x1, y1] = selectionBox
       const { x: bx, y: by } = canv.getBoundingClientRect()
       const x2 = e.clientX - bx
       const y2 = e.clientY - by
@@ -291,7 +307,8 @@ export const ImageEditor = () => {
       const y = Math.min(y1, y2)
       const w = Math.abs(x2 - x1)
       const h = Math.abs(y2 - y1)
-      selectionBox.current = [x, y, w, h]
+
+      dispatch(setSelectionBox([x, y, w, h]))
       if (currentImage) {
         const scaleX = canv.width / currentImage?.width
         const scaleY = canv.height / currentImage.height
@@ -318,7 +335,7 @@ export const ImageEditor = () => {
     const canv = canvasRef.current as HTMLCanvasElement
     pointerDownRef.current = false
 
-    const [x1, y1] = selectionBox.current
+    const [x1, y1] = selectionBox
     const { x: bx, y: by } = canv.getBoundingClientRect()
     const x2 = e.clientX - bx
     const y2 = e.clientY - by
@@ -332,14 +349,12 @@ export const ImageEditor = () => {
       dispatch(nextMask())
       console.log(`maskIndex: ${maskIndex.value}`)
       dispatch(setMaskIndex((maskIndex.value + 1) % maskData.length))
-      return
+      dispatch(setSelectionBox([0, 0, canv.width, canv.height]))
+    } else {
+      dispatch(setSelectionBox([x, y, w, h]))
+      dispatch(setMaskBox([x, y, w, h]))
     }
 
-    selectionBox.current = [x, y, w, h]
-    dispatch(setMaskBox(selectionBox.current))
-
-    const ctx = canv.getContext('2d')
-    if (!ctx) return
     drawCurrentImage()
     drawMasks()
     drawSelectionBox()
@@ -450,24 +465,24 @@ export const ImageEditor = () => {
     }
   }
 
-  useEffect(() => {
-    if (!canvasRef.current) return
-    const canv = canvasRef.current as HTMLCanvasElement
+  // useEffect(() => {
+  //   if (!canvasRef.current) return
+  //   const canv = canvasRef.current as HTMLCanvasElement
 
-    fetch(`http://127.0.0.1:8000/api/images`, {
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        const image = data.find((item: any) => item.original_filename === 'profile-picture.jpg')
-        if (image) {
-          dispatch(setSelectedImage(image))
-        }
-      })
-      .catch((e) => console.error(e))
-  }, [])
+  //   fetch(`http://127.0.0.1:8000/api/images`, {
+  //     headers: {
+  //       'Content-Type': 'application/json',
+  //     },
+  //   })
+  //     .then((res) => res.json())
+  //     .then((data) => {
+  //       const image = data.find((item: any) => item.original_filename === 'profile-picture.jpg')
+  //       if (image) {
+  //         dispatch(setSelectedImage(image))
+  //       }
+  //     })
+  //     .catch((e) => console.error(e))
+  // }, [])
 
   useEffect(() => {
     if (!maskData.length) return
@@ -609,33 +624,17 @@ export const ImageEditor = () => {
       canv.height = height
 
       const ctx = canv.getContext('2d')
-
-      if (!ctx) return
-      ctx.clearRect(0, 0, width, height)
-      ctx.drawImage(
-        image,
-        0,
-        0,
-        image.width,
-        image.height,
-        canv.width / 2 - (image.width / 2) * scale,
-        canv.height / 2 - (image.height / 2) * scale,
-        image.width * scale,
-        image.height * scale
-      )
-
+      drawCurrentImage()
       drawMasks()
 
-      let [x, y, w, h] = selectionBox.current
+      let [x, y, w, h] = selectionBox
 
       let scaled_x = Math.min(width, 1024) / currentImage.width
       let scaled_y = Math.min(height, 1024) / currentImage.height
       scale = Math.min(scaled_x, scaled_y)
 
-      selectionBox.current = [x, y, w, h]
-      dispatch(setMaskBox(selectionBox.current))
-
-      drawSelectionBox()
+      dispatch(setSelectionBox([x, y, w, h]))
+      dispatch(setMaskBox([x, y, w, h]))
 
       dispatch(
         setEditorCanvasStatus({
@@ -661,7 +660,7 @@ export const ImageEditor = () => {
     drawCurrentImage()
     drawMasks()
     drawSelectionBox()
-  }, [masks])
+  }, [masks, currentImage, selectionBox])
 
   useEffect(() => {
     if (!maskData.length) return
@@ -709,7 +708,7 @@ export const ImageEditor = () => {
         <h1 className="text-lg font-bold text-white w-full">
           {selectedImage?.original_filename as string}
         </h1>
-        <div className="flex flex-col relative justify-start w-full lg:h-[1024px]">
+        <div className="flex flex-col relative justify-start w-full">
           <ContextMenu
             onOpenChange={(open) => {
               contextMenuOpen.current = open
@@ -719,7 +718,7 @@ export const ImageEditor = () => {
             <ContextMenuTrigger>
               <canvas
                 ref={canvasRef}
-                className="relative w-full lg:h-fit cursor-crosshair"
+                className="relative w-full h-full cursor-crosshair aspect-square"
                 width={1024}
                 height={1024}
                 onPointerDown={pointerDown}
@@ -872,16 +871,28 @@ export const ImageEditor = () => {
         </div>
         <textarea
           ref={captionRef}
-          className="text-lg text-white w-4/5 h-full m-0 px-2 resize-none border-2 border-solid border-neutral-800"
+          className="text-lg text-white w-full h-full m-0 px-2 resize-none border-2 border-solid border-neutral-800"
           defaultValue={caption || 'Loading...'}
-          onChange={(e) => dispatch(setCaption(e.target.value))}
+          onChange={async (e) => {
+            dispatch(setCaption(e.target.value))
+            const count = await tokenize(e.target.value)
+            setTokenCount(count.length)
+          }}
         />
-        <textarea
+        <div className="flex flex-row items-center h-32 w-full px-2 m-0">
+          <p
+            className="bg-neutral-900 w-full"
+            style={{ color: tokenCount <= 77 ? 'white' : 'mediumvioletred' }}
+          >
+            tokens: {tokenCount} / 77
+          </p>
+        </div>
+        {/*<textarea
           ref={objectCaptionRef}
           className="text-lg text-white w-4/5 h-full m-0 px-2 resize-none border-2 border-solid border-neutral-800"
           defaultValue={objectCaption}
           onChange={(e) => dispatch(setObjectCaption(e.target.value))}
-        />
+        />*/}
         {/* <div className="flex flex-col items-center justify-between h-full w-1/5 p-2 border-2 border-solid border-neutral-800">
           <h1 className="text-lg font-bold text-white">
             Match Score:{' '}
