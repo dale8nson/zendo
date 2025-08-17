@@ -33,3 +33,8 @@ stable-diffusion-x4-upscaler/
 sam_model/
 sam_processor/
 controlnet-canny-sdxl-1.0/
+IP-Adapter-FaceID/
+IP-AdapterPlus/
+UltraSharp/
+training_images/
+backend/models/clip/
