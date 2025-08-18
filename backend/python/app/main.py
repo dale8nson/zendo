@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routes import upload, metadata, images, image, caption, score, cropped_image_caption, tokenize, upscale, ws
+from .routes import upload, metadata, images, image, caption, score, cropped_image_caption, tokenize, upscale, ws, tokens
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import os
@@ -31,21 +31,15 @@ if os.path.exists(UPLOADS_DIR):
 else:
     print(f"[Warning] Uploads directory '{UPLOADS_DIR}' does not exist. Skipping upload mount.")
 
-# app.include_router(example.router)
 app.include_router(upload.router, prefix="/api")
 app.include_router(metadata.router, prefix="/api")
-# app.include_router(predict.router, prefix="/api")
 app.include_router(images.router, prefix="/api")
 app.include_router(image.router, prefix="/api")
 app.include_router(caption.router, prefix="/api")
 app.include_router(score.router, prefix="/api")
 app.include_router(tokenize.router, prefix="/api")
 app.include_router(upscale.router, prefix="/api")
-# app.include_router(generate.router, prefix="/api")
-# app.include_router(refine.router, prefix="/api")
-# app.include_router(masks.router, prefix="/api")
-# app.include_router(inpaint.router, prefix="/api")
-# app.include_router(prompts.router, prefix="/api", tags=["prompts"])
+app.include_router(tokens.router, prefix="/api")
 app.include_router(cropped_image_caption.router, prefix="/api")
 app.include_router(ws.router, prefix="/ws")
 

@@ -200,7 +200,7 @@ async def train_ws(ws: WebSocket):
     try:
         async for message in ws.iter_json():
             await ws.send_json({"status": "started"})
-            response = await train(message["collection"], message["token"], message["image_data"], message["bbox"], message["prompt"],message["initializer_token"], max_train_steps=message["max_train_steps"], num_training_steps=message["num_training_steps"], repeats=message["repeats"], lr=message["lr"])
+            response = await train(collection=message["collection"], token=message["token"], initializer_token=message["initializer_token"], max_train_steps=message["max_train_steps"], num_training_steps=message["num_training_steps"], repeats=message["repeats"], lr=message["lr"])
 
             await ws.send_json(response)
 
