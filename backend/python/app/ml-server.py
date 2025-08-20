@@ -47,7 +47,6 @@ else:
 # app.include_router(score.router, prefix="/api")
 app.include_router(generate.router, prefix="/api")
 app.include_router(refine.router, prefix="/api")
-app.include_router(example.router, prefix="/api")
 # app.include_router(masks.router, prefix="/api")
 app.include_router(inpaint.router, prefix="/api")
 # app.include_router(prompts.router, prefix="/api", tags=["prompts"])
