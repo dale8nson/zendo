@@ -39,4 +39,5 @@ backend/models/sdxl-*/
 backend/models/stable-diffusion-x4-upscaler/
 backend/models/user/*
 !backend/models/user/textual_inversions
+!backend/models/*.py
 !.gitattributes
