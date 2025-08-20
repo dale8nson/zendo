@@ -44,6 +44,8 @@ async function deleteImage(filename: string) {
 export const ImageGallery = () => {
   const dispatch = useAppDispatch()
   const queryClient = useQueryClient()
+  const collection = useAppSelector((state) => state.controlPanel.collection)
+
   const {
     data: entries,
     error,
@@ -52,7 +54,7 @@ export const ImageGallery = () => {
     refetch,
   } = useQuery(
     queryOptions({
-      queryKey: ['images'],
+      queryKey: ['images', collection],
       queryFn: async () => {
         const res = await fetch(`http://127.0.0.1:8000/api/images`, {
           method: 'POST',
@@ -71,8 +73,6 @@ export const ImageGallery = () => {
       staleTime: Infinity,
     })
   )
-
-  const collection = useAppSelector((state) => state.controlPanel.collection)
 
   // useEffect(() => {
   //   dispatch(setCollection('nsfw'))

@@ -11,6 +11,7 @@ import torch
 import numpy as np
 from torchvision.transforms import Compose
 from torchvision import transforms
+import re
 
 class CroppedImageCaptionRequest(BaseModel):
     image_data: str
@@ -30,6 +31,11 @@ async def caption(image: Image.Image) -> dict:
     outputs = model.generate(**inputs)
     text = processor.decode(outputs[0], skip_special_tokens=True)
 
+    # matches = re.match('araff?ed', text)
+    # if matches is not None:
+    #     for match in matches:
+    #         text = text.replace(match, '')
+
     scale_x = 224 / image.width
     scale_y = 224 / image.height
     scale = max(scale_x, scale_y)
@@ -39,6 +45,7 @@ async def caption(image: Image.Image) -> dict:
     print(f"type(text): {type(text)}")
 
     caption = await predict_clip_image(image=image, text=[text])
+
 
 
     return {"caption": caption}

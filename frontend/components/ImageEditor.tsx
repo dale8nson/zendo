@@ -92,18 +92,6 @@ export const ImageEditor = () => {
     (state) => state.imageEditor.selectedImage
   )
 
-  const tokenize = async (text: string) => {
-    const response = await fetch('http://127.0.0.1:8000/api/tokenize', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ text }),
-    })
-    const { tokens } = await response.json()
-    return tokens
-  }
-
   const editorCanvasStatus = useAppSelector((state) => state.imageEditor.status)
   const maskIndex = useAppSelector((state) => state.imageEditor.maskIndex)
   const selectedMaskData = useAppSelector((state) => state.imageEditor.selectedMaskData)
@@ -136,6 +124,7 @@ export const ImageEditor = () => {
   const maskData = useAppSelector((state) => state.imageEditor.maskData)
   const selectedMasks = useAppSelector((state) => state.imageEditor.selectedMasks)
   const selectionBox = useAppSelector((state) => state.imageEditor.selectionBox)
+  const token = useAppSelector((state) => state.imageEditor.token)
 
   const dispatch = useAppDispatch()
 
@@ -159,6 +148,20 @@ export const ImageEditor = () => {
       staleTime: Infinity,
     })
   )
+
+  const collection = useAppSelector((state) => state.imageEditor.collection)
+
+  const tokenize = async (text: string) => {
+    const response = await fetch('http://127.0.0.1:8000/api/tokenize', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ text }),
+    })
+    const { tokens } = await response.json()
+    return tokens
+  }
 
   const { data: caption_score } = useQuery(
     queryOptions({
@@ -259,7 +262,7 @@ export const ImageEditor = () => {
     const ctx = canv.getContext('2d')
     if (!ctx) return
 
-    const [x, y, w, h] = selectionBox
+    let [x, y, w, h] = selectionBox
 
     if (selectionBoxVisible) {
       ctx.strokeStyle = 'white'
@@ -267,6 +270,18 @@ export const ImageEditor = () => {
       ctx.lineWidth = 2
       ctx.strokeRect(x, y, w, h)
     }
+
+    const s = Math.max(w, h)
+
+    ;[x, y, w, h] = [
+      Math.max(x - 0.25 * w, 0),
+      Math.max(y - 0.25 * h, 0),
+      Math.min(s * 1.5, canv.width),
+      Math.min(s * 1.5, canv.height),
+    ]
+
+    ctx.strokeStyle = 'red'
+    ctx.strokeRect(x, y, w, h)
   }
 
   const pointerDown: PointerEventHandler<HTMLCanvasElement> = (e) => {
@@ -465,25 +480,6 @@ export const ImageEditor = () => {
     }
   }
 
-  // useEffect(() => {
-  //   if (!canvasRef.current) return
-  //   const canv = canvasRef.current as HTMLCanvasElement
-
-  //   fetch(`http://127.0.0.1:8000/api/images`, {
-  //     headers: {
-  //       'Content-Type': 'application/json',
-  //     },
-  //   })
-  //     .then((res) => res.json())
-  //     .then((data) => {
-  //       const image = data.find((item: any) => item.original_filename === 'profile-picture.jpg')
-  //       if (image) {
-  //         dispatch(setSelectedImage(image))
-  //       }
-  //     })
-  //     .catch((e) => console.error(e))
-  // }, [])
-
   useEffect(() => {
     if (!maskData.length) return
     console.log(`maskData: `, maskData)
@@ -546,31 +542,6 @@ export const ImageEditor = () => {
     }
     setSelectedMasks(masks)
   }, [selectedMaskData])
-
-  // useEffect(() => {
-  //   if (!selectedMasks.length || !canvasRef.current) return
-  //   console.log(`selectedMasks: `, selectedMasks)
-  //   const canv = canvasRef.current
-  //   const ctx = canv.getContext('2d')
-  //   if (!ctx) return
-
-  //   for (const index in selectedMasks) {
-  //     const [x, y, w, h] = selectedMaskData[index].canvas_box
-  //     const mask = selectedMasks[index]
-  //     let image = new Image()
-  //     if (maskData[index].active) {
-  //       image = masks[index].segmentation
-  //     }
-  //     if (maskData[index].include) {
-  //       image = masks[index].mask
-  //     }
-  //     if (maskData[index].exclude) {
-  //       image = masks[index].inverted_mask
-  //     }
-
-  //     ctx.drawImage(image, 0, 0, image.width, image.height, x, y, w, h)
-  //   }
-  // }, [selectedMasks])
 
   useEffect(() => {
     if (!selectedImage) return
@@ -874,9 +845,17 @@ export const ImageEditor = () => {
           className="text-lg text-white w-full h-full m-0 px-2 resize-none border-2 border-solid border-neutral-800"
           defaultValue={caption || 'Loading...'}
           onChange={async (e) => {
-            dispatch(setCaption(e.target.value))
             const count = await tokenize(e.target.value)
             setTokenCount(count.length)
+            // let value = e.target.value
+
+            // value = value.replace(
+            //   new RegExp(`[^<\\W]?(${token.slice(1, token.length - 1)})[^>]`),
+            //   '<$1>'
+            // )
+            // console.log(`value: ${value}`)
+            // e.target.value = value
+            dispatch(setCaption(e.target.value))
           }}
         />
         <div className="flex flex-row items-center h-32 w-full px-2 m-0">

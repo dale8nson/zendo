@@ -16,6 +16,7 @@ interface ImageEditorState {
   scaledSelectionBox: number[]
   objectCaption: string
   selectionBox: number[]
+  tokens: string[]
 }
 
 const initialState: ImageEditorState = {
@@ -34,6 +35,7 @@ const initialState: ImageEditorState = {
   objectCaption: '',
   selectedMasks: [],
   selectionBox: [0, 0, 0, 0],
+  tokens: [],
 }
 
 const imageEditorSlice = createSlice({
@@ -84,6 +86,9 @@ const imageEditorSlice = createSlice({
     },
     setSelectedMasks(state, action) {
       state.selectedMasks = action.payload
+    },
+    setTokens(state, action) {
+      state.tokens = action.payload
     },
     nextMask(state) {
       let maskData = state.maskData

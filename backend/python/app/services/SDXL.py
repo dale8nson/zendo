@@ -1,26 +1,24 @@
-from diffusers import StableDiffusionXLPipeline, StableDiffusionXLImg2ImgPipeline, StableDiffusionXLInpaintPipeline, StableDiffusionUpscalePipeline, DDPMScheduler, StableDiffusionXLControlNetPipeline, ControlNetModel, DiffusionPipeline
+from diffusers import StableDiffusionXLPipeline, StableDiffusionXLImg2ImgPipeline, StableDiffusionXLInpaintPipeline,  StableDiffusionXLControlNetPipeline, ControlNetModel, DiffusionPipeline
 
 from transformers import CLIPTokenizer
 
 import torch
-from torchvision import transforms
 import torchvision.transforms as T
+from safetensors.torch import load_file
+
 from pydantic.main import BaseModel
-from PIL import Image, ImageFilter, ImageChops, ImageOps, ImageEnhance
+from PIL import Image, ImageOps, ImageEnhance
 import os
 import base64
 from io import BytesIO
 from typing import cast, List, Any, TypedDict
 import numpy as np
-from diffusers.utils import load_image
-# from concurrent.futures import ProcessPoolExecutor
 from rembg import remove
-import math
 from datetime import datetime, timezone
-import asyncio
 import cv2
 from .upscale import upscale
 import re
+
 
 class LayerImage(TypedDict):
     bbox: List[float]
@@ -103,6 +101,12 @@ class InpaintRequest(BaseModel):
 class TokenizeRequest(BaseModel):
     text: str
 
+
+def is_available():
+    return False
+
+
+torch.cuda.is_available = is_available
 
 async def init_SDXL():
     print("Initializing SDXL pipeline...")
@@ -193,7 +197,7 @@ async def init_controlnet():
     if torch.cuda.is_available():
         controlnet.enable_model_cpu_offload()
 
-    controlnet = controlnet.to(device)
+    controlnet.to(device)
 
 
 async def init_tokenizer():
@@ -261,33 +265,24 @@ async def load_embeddings():
 
 async def get_pipe():
     global pipe
-    # if pipe is None:
-    #     await init_SDXL()
     return pipe
 
 async def get_refiner():
     global refiner
-    # if pipe is None:
-    #     await init_refiner()
     return refiner
 
 async def get_inpainter():
     global inpainter
-    # if inpainter is None:
-    #     await init_inpainter()
     return inpainter
 
 async def get_controlnet():
     global controlnet
-    # if controlnet is None:
-    #     await init_controlnet()
     return controlnet
 
 async def generate_latent(image: Image.Image, pipeline: DiffusionPipeline, timestep: torch.Tensor) -> torch.Tensor:
     global pipe, latent, prompt_embeds, negative_prompt_embeds
     if pipe is None:
-        print("SDXL pipeline not initialized")
-        return
+        await init_SDXL()
 
     latent = torch.tensor(np.asarray(image)).unsqueeze(0).to(device, dtype=torch.float32)
     print(f"latent.size(): {latent.size()}")
@@ -299,13 +294,12 @@ async def generate_latent(image: Image.Image, pipeline: DiffusionPipeline, times
 
     return latent
 
-
 async def generate(prompt, iterations, guidance_scale, negative_prompt, prompt_2, negative_prompt_2, ip_adapter_image=None, use_face_id=False, bbox=None, remove_background=False) -> dict:
 
     global selected_image, pipe, selected_prompt, latent, prompt_embeds, controlnet, negative_prompt_embeds, inpainter, refiner
+
     selected_prompt = prompt
-    # await generate_latent(prompt)
-    #
+
     if inpainter is not None:
         inpainter.to("cpu")
         inpainter = None
@@ -333,10 +327,11 @@ async def generate(prompt, iterations, guidance_scale, negative_prompt, prompt_2
     if ip_adapter_image is not None:
         if use_face_id and pipe is not None:
             pipe.load_ip_adapter(
-                os.path.join(os.getcwd(), "../models/IP-Adapter-FaceID"),
-                subfolder="",
-                image_encoder="image_encoder",
-                weight_name="pytorch_model.bin"
+                '../models/IP-Adapter-FaceID',
+                subfolder=".",
+                weight_name="pytorch_model.bin",
+                use_safetensors=True,
+                slice_size=1
             )
 
     if ip_adapter_image is not None:
@@ -354,8 +349,6 @@ async def generate(prompt, iterations, guidance_scale, negative_prompt, prompt_2
             scale_x = 1024 / root_layer_width
             scale_y = 1024 / root_layer_height
             scale = min(scale_x, scale_y)
-            margin_x = (1024 - root_layer_width) / 2
-            margin_y = (1024 - root_layer_height) / 2
 
             for layer in layers:
 
@@ -364,10 +357,9 @@ async def generate(prompt, iterations, guidance_scale, negative_prompt, prompt_2
                 image_data = history[history_index]["imageData"]
                 print(f"image_data: {image_data[0:100]}")
                 bbox = history[history_index]["bbox"]
-                # bbox = cast(tuple[int, int, int, int], tuple([int(n * scale) for n in [bbox[i] + margin_x if i % 2 == 0 else bbox[i] + margin_y for i in range(len(bbox))]]))
+
                 bbox = [int(n * scale) for n in bbox]
                 print(f"bbox: {bbox}, bbox width: {bbox[2] - bbox[0]} bbox height: {bbox[3] - bbox[1]}")
-
 
                 b64 = extract_base64_data(image_data)
                 image_bytes = base64.b64decode(b64)
@@ -399,8 +391,6 @@ async def generate(prompt, iterations, guidance_scale, negative_prompt, prompt_2
 
         ip_adapter_image = ip_adapter_image.resize((int(ip_adapter_image.width * scale), int(ip_adapter_image.height * scale)))
 
-        # ipAdapterImage = ImageOps.pad(ipAdapterImage, (1024, 1024), color=(0,0,0)).convert("RGB")
-
         print(f"ipAdapterImage: {ip_adapter_image}")
         ip_adapter_image = np.asarray(ip_adapter_image)
         ip_adapter_image = cv2.Canny(ip_adapter_image, 100, 200)
@@ -413,9 +403,12 @@ async def generate(prompt, iterations, guidance_scale, negative_prompt, prompt_2
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
-        image = controlnet(prompt=prompt, negative_prompt=negative_prompt, prompt_2=prompt_2, negative_prompt_2=negative_prompt_2, image=ip_adapter_image, guidance_scale=guidance_scale, num_inference_steps=iterations, controlnet_conditioning_scale=0.65).images[0]
+        image = controlnet(prompt=prompt, negative_prompt=negative_prompt, prompt_2=prompt_2, negative_prompt_2=negative_prompt_2, image=ip_adapter_image, guidance_scale=guidance_scale, num_inference_steps=iterations,
+        output_type='latent',
+        denoising_end=0.8,
+        controlnet_conditioning_scale=0.65).images[0]
 
-        image.save(os.path.join(os.getcwd(), f"app/test_images/controlnet-{datetime.utcnow()}.png"))
+        # image.save(os.path.join(os.getcwd(), f"app/test_images/controlnet-{datetime.utcnow()}.png"))
 
         buf = BytesIO()
         selected_image = image
@@ -428,20 +421,17 @@ async def generate(prompt, iterations, guidance_scale, negative_prompt, prompt_2
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
-        return {"image": image_data}
-
-    image = pipe(prompt, negative_prompt=negative_prompt, num_inference_steps=iterations, guidance_scale=guidance_scale, prompt_2=prompt_2, negative_prompt_2=negative_prompt_2, ip_adapter_image=ip_adapter_image, width=1024, height=1024, denoising_end=0.8, output_type='latent').images[0]
+    else:
+        image = pipe(prompt, negative_prompt=negative_prompt, num_inference_steps=iterations, guidance_scale=guidance_scale, prompt_2=prompt_2, negative_prompt_2=negative_prompt_2, ip_adapter_image=ip_adapter_image, width=1024, height=1024, denoising_end=0.8, output_type='latent').images[0]
 
     image = refiner( prompt=prompt, num_inference_steps=iterations, denoising_start=0.8, image=image).images[0]
 
     if use_face_id and pipe is not None:
         pipe.unload_ip_adapter()
 
-
-
     print(f"image: {image}")
     image.save(os.path.join(os.getcwd(), f"app/test_images/generated-image-{datetime.now(timezone.utc)}.png"))
-    global buffer
+
     buffer = BytesIO()
     selected_image = image
     selected_image.save(buffer, format="PNG")
@@ -520,12 +510,7 @@ async def refine(prompt, layers, strength, inference_steps, guidance_scale, nega
         print(f"bbox width: {bbox[2] - bbox[0]} bbox height: {bbox[3] - bbox[1]}")
         print(f"layer_image width: {layer_image.width} layer_image height: {layer_image.height}")
 
-        # image.paste(layer_image, box=bbox)
-        # layer_image = layer_image.resize((int(root_layer_width * scale), int(root_layer_height * scale)))
-        image.paste(layer_image, box=bbox)
-
-
-
+        image.paste(layer_image, box=tuple[int, int, int, int](bbox))
 
     image.save(os.path.join(os.getcwd(), f"{test_filepath}/img2img_original.png"))
 
@@ -545,53 +530,6 @@ async def refine(prompt, layers, strength, inference_steps, guidance_scale, nega
     if remove_background:
         image = cast(Image.Image, remove(image, bgcolor=(127, 127, 127, 255)))
     image = ImageOps.pad(image, (1024, 1024), color=(0, 0, 0))
-
-
-    # denoising_end = 1.0 - strength
-    # refiner.scheduler.set_timesteps(inference_steps)
-    # t_index = int(denoising_end * inference_steps)
-    # if t_index >= len(refiner.scheduler.timesteps):
-    #     t_index = len(refiner.scheduler.timesteps) - 1
-
-    # timestep = refiner.scheduler.timesteps[t_index]
-    # print(f"timestep: {timestep}")
-    # latent = torch.tensor(np.asarray(image)).unsqueeze(0).to(device, dtype=torch.float32)
-    # print(f"latent.size(): {latent.size()}")
-    # latent = latent.movedim(3, 1)
-
-    # latent = refiner.vae.encode(latent).latent_dist.sample()
-
-    # latents_mean = latents_std = None
-
-    # if hasattr(refiner.vae.config, "latents_mean") and refiner.vae.config.latents_mean is not None:
-    #     latents_mean = torch.tensor(refiner.vae.config.latents_mean).view(1, 4, 1, 1)
-    # if hasattr(refiner.vae.config, "latents_std") and refiner.vae.config.latents_std is not None:
-    #     latents_std = torch.tensor(refiner.vae.config.latents_std).view(1, 4, 1, 1)
-
-    # if torch.cuda.is_available or torch.backends.mps.is_available()():
-    #     if hasattr(refiner, "final_offload_hook") and refiner.final_offload_hook is not None:
-    #         refiner.text_encoder_2.to("cpu")
-    #         torch.cuda.empty_cache()
-    # else:
-    #     # make sure the VAE is in float32 mode, as it overflows in float16
-    #     if refiner.vae.config.force_upcast:
-    #         latent = latent.float()
-    #         refiner.vae.to(dtype=torch.float32)
-
-    # if latents_mean is not None and latents_std is not None:
-    #     latents_mean = latents_mean.to(device=device, dtype=dtype)
-    #     latents_std = latents_std.to(device=device, dtype=dtype)
-    #     latent = (latent - latents_mean) * refiner.vae.config.scaling_factor / latents_std
-    # else:
-    #     latent = refiner.vae.config.scaling_factor * latent
-
-    # print(f"latent.size(): {latent.size()}")
-
-    # noise = torch.randn_like(latent)
-
-    # latent = refiner.scheduler.add_noise(latent, noise, torch.tensor([timestep]))
-
-    # print(f"type(latent): {type(latent)}")
 
     print(f"image: {image}")
 
@@ -657,8 +595,6 @@ async def refine(prompt, layers, strength, inference_steps, guidance_scale, nega
 
 #     def filter(self, image: Image.Image) -> ImagingCore:
 #         filtered_image = Image.new(mode="RGBA", size=self.image.size)
-
-
 
 async def inpaint(layers, prompt="", mask_data = [], strength=0.5, inference_steps=50, guidance_scale = 7.5, use_refiner=False, inpaint_refiner_ratio=0.85, inpaint_refiner_inference_steps=5,  inpaint_refiner_guidance_scale=7.5, negative_prompt=None, prompt_2=None, negative_prompt_2=None, refiner_prompt=None, refiner_negative_prompt=None, refiner_prompt_2=None, refiner_negative_prompt_2=None, new_layer=False, remove_background=False, callback_on_step_end=None):
 
@@ -899,9 +835,7 @@ async def inpaint(layers, prompt="", mask_data = [], strength=0.5, inference_ste
         output_alpha = np.where(output_arr != image_arr, output_arr, image_arr * 0)
         output_alpha = Image.fromarray(output_alpha).convert("L")
         output.putalpha(output_alpha)
-        output = output.crop(tuple(composite_mask_bbox))
-
-
+        output = output.crop(tuple[int, int, int, int](composite_mask_bbox))
 
     output.save(os.path.join(os.getcwd(),f"{test_filepath}/inpaint-image-final-output.png"))
     print(f"image.size: {output.size}")

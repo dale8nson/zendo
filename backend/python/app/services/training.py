@@ -5,14 +5,13 @@ from torch.optim.optimizer import Optimizer
 import torchvision.transforms as T
 from torch.utils.data import Dataset
 from torchvision import transforms
-import safetensors
 from safetensors.torch import save_file, load_file
 from transformers import CLIPTokenizer, CLIPTextModelWithProjection, CLIPTextModel, get_scheduler
-from diffusers import StableDiffusionXLPipeline, StableDiffusionXLInpaintPipeline, StableDiffusionXLImg2ImgPipeline, StableDiffusionXLControlNetPipeline, DiffusionPipeline
+from diffusers import StableDiffusionXLPipeline, StableDiffusionXLImg2ImgPipeline, DiffusionPipeline
 from diffusers.utils.import_utils import is_xformers_available
 from pydantic.main import BaseModel
-from typing import List, Tuple, Dict, cast
-from PIL import Image, ImageEnhance, ImageChops, ImageOps, ImageFilter
+from typing import List, Tuple, Dict, Any, cast
+from PIL import Image, ImageEnhance, ImageOps, ImageFilter
 import base64
 from io import BytesIO
 import os
@@ -24,18 +23,18 @@ import numpy as np
 from tqdm.auto import tqdm
 import re
 from accelerate import Accelerator
-from accelerate.utils import ProjectConfiguration, set_seed
-from app.services.SDXL import get_pipe, get_refiner, get_inpainter, get_controlnet, init_SDXL
+from app.services.SDXL import get_pipe, get_refiner, init_refiner, get_inpainter, get_controlnet, init_SDXL
 from app.services.textual_inversion.textual_inversion_sdxl import TextualInversionDataset
 import inspect
 import gc
 from datetime import datetime, timezone
+import asyncio
+import concurrent.futures
 
 from diffusers import (
     AutoencoderKL,
     DDPMScheduler,
     DiffusionPipeline,
-    DPMSolverMultistepScheduler,
     UNet2DConditionModel,
 )
 
@@ -500,7 +499,6 @@ async def create_set(image_data: str, masks: List[MaskData], collection: str, to
     random.choice(variants)(image)
     full(image)
 
-
     json_path = os.path.join(os.getcwd(), f"../models/user/{collection}/captions.json")
 
     if not os.path.exists(json_path):
@@ -583,7 +581,7 @@ class CustomPromptDataset(TextualInversionDataset):
 
 
 
-class OneImageDataset(Dataset):
+class RandomImageDataset(Dataset):
 
     def __init__(self, placeholder_token: str, initializer_token: str, collection: str, repeats: int, tokenizer_1, tokenizer_2, size=1024):
 
@@ -777,6 +775,40 @@ def save_progress(tokenizer, tokenizer_2, text_encoder, text_encoder_2, token: s
     save_file(f, save_path_2, {'format': 'pt'})
 
 
+async def validate(collection: str, data: Dict[str, Any], inference_steps: int, guidance_scale: float, step: int):
+
+    pipe = await get_pipe()
+    if pipe is None:
+        await init_SDXL()
+        pipe = await get_pipe()
+        pipe = cast(StableDiffusionXLPipeline, pipe)
+
+    refiner = await get_refiner()
+    if refiner is None:
+        await init_refiner()
+        refiner = await get_refiner()
+        refiner = cast(StableDiffusionXLImg2ImgPipeline, refiner)
+
+
+    model_path = os.path.join(os.getcwd(), f"../models/user/{collection}")
+
+    for file in [f'{collection}.safetensors', f'{collection}_2.safetensors']:
+        path = os.path.join(model_path, file)
+        pipe.load_textual_inversion(path)
+
+    image = pipe(prompt=data['prompt'], num_inference_steps=inference_steps, guidance_scale=guidance_scale, width=1024, height=1024, denoising_end=0.8, output_type='latent').images[0]
+
+    image = refiner(prompt=data['prompt'], num_inference_steps=inference_steps, denoising_start=0.8, image=image).images[0]
+
+    validation_path = os.path.join(model_path, 'validation_images')
+
+    os.makedirs(validation_path, exist_ok=True)
+    save_path = os.path.join(validation_path, f'{data["token"]}-step-{step}.png')
+
+    image = image.convert("RGBA")
+    image.save(save_path)
+
+
 async def train(
     collection:str,
     token: str,
@@ -797,7 +829,6 @@ async def train(
     validation_steps=100,
     batch_size=1,
     num_workers=0,
-    resume_from_checkpoint="latest"
 ):
 
     device = torch.device("mps" if torch.backends.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu")
@@ -936,7 +967,7 @@ async def train(
     print(f"tokenizer_1.get_added_vocab(): {tokenizer_1.get_added_vocab()}")
     print(f"placeholder_token: {placeholder_token}")
 
-    train_dataset = OneImageDataset(
+    train_dataset = RandomImageDataset(
         placeholder_token=placeholder_token,
         initializer_token=initializer_token,
         collection=collection,
@@ -978,9 +1009,9 @@ async def train(
 
     if path is None:
         print(
-            f"Checkpoint '{resume_from_checkpoint}' does not exist. Starting a new training run."
+            "Checkpoint does not exist. Starting a new training run."
         )
-        resume_from_checkpoint = None
+
         initial_global_step = 0
     else:
         print(f"Resuming from checkpoint {path}")
@@ -1320,9 +1351,12 @@ async def train(
 
                     save_progress(tokenizer=tokenizer_1, tokenizer_2=tokenizer_2, text_encoder=text_encoder_1, text_encoder_2=text_encoder_2, token=token, weight_name=collection, output_dir=output_dir, step=global_step, optimizer=optimizer, lr_scheduler=lr_scheduler)
 
-
                     logs = {"loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0]}
                     progress_bar.set_postfix(**logs)
+
+                    # data = train_dataset[random.randint(0, len(train_dataset))]
+
+                    # validate(collection=collection, data=data, inference_steps=15, guidance_scale=7.5, step=global_step)
 
                     print(f"Global step: {global_step}, loss: {loss.detach().item():.4f}")
 
@@ -1335,8 +1369,16 @@ async def train(
 
             raise e
 
-
         save_progress(tokenizer=tokenizer_1, tokenizer_2=tokenizer_2, text_encoder=text_encoder_1, text_encoder_2=text_encoder_2, token=token, weight_name=collection, output_dir=output_dir, step=global_step, optimizer=optimizer, lr_scheduler=lr_scheduler)
+
+        # data = train_dataset[random.randint(0, len(train_dataset))]
+
+        # loop = asyncio.get_running_loop()
+
+        # with concurrent.futures.ThreadPoolExecutor() as pool:
+        #         await loop.run_in_executor(
+        #             pool, validate(collection=collection, data=data, inference_steps=15, guidance_scale=7.5, step=global_step))
+
 
         if torch.backends.mps.is_available():
             torch.mps.empty_cache()

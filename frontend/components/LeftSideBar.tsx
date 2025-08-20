@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/Button'
 import { Label } from './ui/label'
 import { toast } from 'sonner'
-import { setToken } from '@/lib/features/image-editor/imageEditorSlice'
+import { setToken, setCaption } from '@/lib/features/image-editor/imageEditorSlice'
 
 import {
   Accordion,
@@ -19,6 +19,7 @@ import {
 
 import { setCollection, setEditorCanvasStatus } from '@/lib/features/image-editor/imageEditorSlice'
 import { toggleDisabled } from '@/lib/features/control-panel/controlPanelSlice'
+import { queryOptions, useQuery, useQueryClient } from '@tanstack/react-query'
 
 export const LeftSideBar = () => {
   const caption = useAppSelector((state) => state.imageEditor.caption)
@@ -136,9 +137,6 @@ export const LeftSideBar = () => {
     const message = {
       collection,
       token,
-      image_data: selectedImage?.image_data,
-      bbox: bbox,
-      prompt: caption,
       initializer_token: concept,
       max_train_steps: trainSteps,
       num_training_steps: trainSteps,
@@ -230,10 +228,11 @@ export const LeftSideBar = () => {
               type="text"
               placeholder={concept}
               className="valid:border-green-400 invalid:border-red-500"
-              onChange={async (e) => {
-                setConcept(e.target.value)
-                if (debounce.current) return
-                debounce.current = true
+              onChange={(e) => {
+                e.target.setCustomValidity('Token does not exist in pretrained model')
+              }}
+              onKeyDown={async (e) => {
+                if (!e.key == 'Enter') return
                 const tokens = await tokenize(e.target.value)
                 if (tokens.length != 1) {
                   e.target.setCustomValidity('Token does not exist in pretrained model')
@@ -241,8 +240,8 @@ export const LeftSideBar = () => {
                 } else {
                   e.target.setCustomValidity('')
                   e.target.checkValidity()
+                  setConcept(e.target.value)
                 }
-                setTimeout(() => (debounce.current = false), 500)
               }}
             />
             <Input
@@ -250,18 +249,23 @@ export const LeftSideBar = () => {
               type="text"
               placeholder={token}
               className="valid:border-green-400 invalid:border-red-500"
-              onChange={async (e) => {
-                dispatch(setToken(e.target.value))
-                // if (!debounce.current) return
-                // debounce.current = false
+              onChange={(e) => {
+                dispatch(setCaption(caption?.replaceAll(e.target.value, `<${e.target.value}>`)))
+              }}
+              onKeyDown={async (e) => {
+                if (!e.key == 'Enter') return
                 const tokens = await tokenize(e.target.value)
                 if (tokens.length === 1) {
                   e.target.setCustomValidity('Token already exists')
                 } else {
+                  dispatch(setToken(e.target.value))
+                  let cap: string = caption as string
+                  cap = cap?.replaceAll(/<(.+?)>/g, '$1')
+                  cap = cap?.replaceAll(e.target.value, `<${e.target.value}>`)
+                  dispatch(setCaption(cap))
                   e.target.setCustomValidity('')
                 }
                 e.target.checkValidity()
-                setTimeout(() => (debounce.current = true), 100)
               }}
             />
             <Button onClick={addToDatasetHandler}>Add to Dataset</Button>

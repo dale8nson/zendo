@@ -95,6 +95,7 @@ export function Preview() {
   const pointerDownRef = useRef<boolean>(false)
   const selectionBox = useRef([0, 0, 0, 0])
   const pointerCanvasCoords = useRef<number[]>([0, 0])
+  const selectionRange = useRef([0, 0, 0, 0])
   const debounce = useRef(false)
 
   const drawLayers = async () => {
@@ -160,12 +161,16 @@ export function Preview() {
     const ctx = canv.getContext('2d')
     if (!ctx) return
 
-    const [x, y, w, h] = selectionBox.current
+    let [x, y, w, h] = selectionBox.current
 
     if (selectionBoxVisible) {
       ctx.strokeStyle = 'white'
       ctx.setLineDash([15, 15])
       ctx.lineWidth = 2
+      ctx.strokeRect(x, y, w, h)
+      ;[x, y, w, h] = selectionRange.current
+
+      ctx.strokeStyle = 'red'
       ctx.strokeRect(x, y, w, h)
     }
   }
@@ -238,6 +243,14 @@ export function Preview() {
 
       // pointerCanvasCoords.current = [x, y]
       selectionBox.current = [x, y, w, h]
+      if (currentImage) {
+        selectionRange.current = [
+          Math.max(x - w * 0.25, 0),
+          Math.max(y - h * 0.25, 0),
+          Math.min(w * 1.25, currentImage.width),
+          Math.min(h * 1.25, currentImage.height),
+        ]
+      }
       if (!selectionBoxVisible) setSelectionBoxVisible(true)
       dispatch(
         setPreviewStatus({
