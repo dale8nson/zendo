@@ -1,4 +1,5 @@
 from diffusers import StableDiffusionXLPipeline, StableDiffusionXLImg2ImgPipeline, StableDiffusionXLInpaintPipeline,  StableDiffusionXLControlNetPipeline, ControlNetModel, DiffusionPipeline
+from diffusers.image_processor import VaeImageProcessor
 
 from transformers import CLIPTokenizer
 
@@ -16,7 +17,6 @@ import numpy as np
 from rembg import remove
 from datetime import datetime, timezone
 import cv2
-from .upscale import upscale
 import re
 
 
@@ -382,7 +382,35 @@ async def generate(prompt, iterations, guidance_scale, negative_prompt, prompt_2
             ip_adapter_image = Image.open(BytesIO(image_bytes)).convert("RGB")
 
         if remove_background:
-            ip_adapter_image = remove(ip_adapter_image, bgcolor=(127, 127, 127, 255))
+
+            latents_mean = torch.tensor(pipe.vae.config.latents_mean).view(1, 4, 1, 1).to(device)
+            latents_std = torch.tensor(pipe.vae.config.latents_std).view(1, 4, 1, 1).to(device)
+
+            num_latent_channels:int = pipe.unet.config.in_channels
+            vae_scale_factor = 2 ** (len(pipe.vae.config.block_out_channels) - 1)
+
+            foreground = remove(ip_adapter_image, bgcolor=(0, 0, 0, 0))
+
+            alpha = foreground.getchannel('A').convert('RGB')
+            alpha_tensor = T.PILToTensor(alpha)
+
+            foreground = foreground.convert('RGB')
+            image = pipe.image_processor.preprocess(foreground)
+            image.to(device)
+            image = image.float()
+            fg_latent = pipe.vae.encode(image).latent_dist.sample()
+            bg_latent = torch.randn(shape=fg_latent.shape)
+            alpha_latent = pipe.vae.encode(alpha_tensor).latent_dist.sample()
+            bg_latent.to(device)
+            foreground.to(device)
+            alpha_latent.to(device)
+
+            ip_adapter_image = torch.where(alpha_latent == 0, bg_latent, fg_latent)
+
+            print(f'image.shape: {image.shape}')
+
+            pipe.vae.to(dtype=torch.float32)
+
 
         print(f"ipAdapterImage: {ip_adapter_image}")
         width_scale = 1024 / ip_adapter_image.width
@@ -398,6 +426,12 @@ async def generate(prompt, iterations, guidance_scale, negative_prompt, prompt_2
         ip_adapter_image = np.concatenate([ip_adapter_image, ip_adapter_image, ip_adapter_image], axis=2)
         ip_adapter_image = Image.fromarray(ip_adapter_image)
 
+        ip_adapter_image = ImageOps.pad(ip_adapter_image, (1024, 1024), color=(0, 0, 0))
+
+        # latent = pipe.vae.encode(ip_adapter_image).latent_dist.sample()
+
+        # ip_adapter_image = torch.where(alpha_tensor == 0, bg_latent, ip_adapter_image)
+
         if torch.backends.mps.is_available():
             torch.mps.empty_cache()
         if torch.cuda.is_available():
@@ -410,11 +444,11 @@ async def generate(prompt, iterations, guidance_scale, negative_prompt, prompt_2
 
         # image.save(os.path.join(os.getcwd(), f"app/test_images/controlnet-{datetime.utcnow()}.png"))
 
-        buf = BytesIO()
-        selected_image = image
-        selected_image.save(buf, format="PNG")
-        buf.seek(0)
-        image_data = base64.b64encode(buf.read()).decode('utf-8')
+        # buf = BytesIO()
+        # selected_image = image
+        # selected_image.save(buf, format="PNG")
+        # buf.seek(0)
+        # image_data = base64.b64encode(buf.read()).decode('utf-8')
 
         if torch.backends.mps.is_available():
             torch.mps.empty_cache()
@@ -578,7 +612,7 @@ async def refine(prompt, layers, strength, inference_steps, guidance_scale, nega
     buffer.seek(0)
 
     image_data = base64.b64encode(buffer.read()).decode('utf-8')
-    image_data = upscale(image_data)
+
 
 
     if torch.backends.mps.is_available():
@@ -865,9 +899,6 @@ async def inpaint(layers, prompt="", mask_data = [], strength=0.5, inference_ste
         torch.cuda.empty_cache()
 
     return {"image_data": b64}
-
-
-
 
 
 async def tokenize(text: str):

@@ -110,18 +110,18 @@ export function PromptPanel() {
 
                   console.log(`tokens: `, tokens)
                   let value = e.target.value
-                  for (const tk of tokens) {
-                    console.log(`tk: ${tk}`)
-                    console.log(`tk.slice(1, tk.length - 1): ${tk.slice(1, tk.length - 1)}`)
-                    // value = e.target.value.replaceAll(tk.slice(1, tk.length - 1), ` ${tk}`)
+                  // for (const tk of tokens) {
+                  //   console.log(`tk: ${tk}`)
+                  //   console.log(`tk.slice(1, tk.length - 1): ${tk.slice(1, tk.length - 1)}`)
+                  //   // value = e.target.value.replaceAll(tk.slice(1, tk.length - 1), ` ${tk}`)
 
-                    value = value.replace(
-                      new RegExp(`[^<\\W]?(${tk.slice(1, tk.length - 1)})[^>]`),
-                      '<$1>'
-                    )
-                  }
+                  //   value = value.replace(
+                  //     new RegExp(`[^<\\W]?(${tk.slice(1, tk.length - 1)})[^>]`),
+                  //     '<$1>'
+                  //   )
+                  // }
                   console.log(`value: ${value}`)
-                  e.target.value = value
+                  // e.target.value = value
                   dispatch(setGeneratePrompt(value))
                   localStorage.setItem('generate_prompt', value)
                 }
@@ -140,18 +140,18 @@ export function PromptPanel() {
 
                   console.log(`tokens: `, tokens)
                   let value = e.target.value
-                  for (const tk of tokens) {
-                    console.log(`tk: ${tk}`)
-                    console.log(`tk.slice(1, tk.length - 1): ${tk.slice(1, tk.length - 1)}`)
-                    // value = e.target.value.replaceAll(tk.slice(1, tk.length - 1), ` ${tk}`)
+                  // for (const tk of tokens) {
+                  //   console.log(`tk: ${tk}`)
+                  //   console.log(`tk.slice(1, tk.length - 1): ${tk.slice(1, tk.length - 1)}`)
+                  //   // value = e.target.value.replaceAll(tk.slice(1, tk.length - 1), ` ${tk}`)
 
-                    value = value.replace(
-                      new RegExp(`[^<\\W]?(${tk.slice(1, tk.length - 1)})[^>]`),
-                      '<$1>'
-                    )
-                  }
+                  //   value = value.replace(
+                  //     new RegExp(`[^<\\W]?(${tk.slice(1, tk.length - 1)})[^>]`),
+                  //     '<$1>'
+                  //   )
+                  // }
                   console.log(`value: ${value}`)
-                  e.target.value = value
+                  // e.target.value = value
                   dispatch(setGenerateNegativePrompt(value))
                   localStorage.setItem('generate_negative_prompt', value)
                 }
@@ -170,18 +170,18 @@ export function PromptPanel() {
 
                   console.log(`tokens: `, tokens)
                   let value = e.target.value
-                  for (const tk of tokens) {
-                    console.log(`tk: ${tk}`)
-                    console.log(`tk.slice(1, tk.length - 1): ${tk.slice(1, tk.length - 1)}`)
-                    // value = e.target.value.replaceAll(tk.slice(1, tk.length - 1), ` ${tk}`)
+                  // for (const tk of tokens) {
+                  //   console.log(`tk: ${tk}`)
+                  //   console.log(`tk.slice(1, tk.length - 1): ${tk.slice(1, tk.length - 1)}`)
+                  //   // value = e.target.value.replaceAll(tk.slice(1, tk.length - 1), ` ${tk}`)
 
-                    value = value.replace(
-                      new RegExp(`[^<\\W]?(${tk.slice(1, tk.length - 1)})[^>]`),
-                      '<$1>'
-                    )
-                  }
+                  //   value = value.replace(
+                  //     new RegExp(`[^<\\W]?(${tk.slice(1, tk.length - 1)})[^>]`),
+                  //     '<$1>'
+                  //   )
+                  // }
                   console.log(`value: ${value}`)
-                  e.target.value = value
+                  // e.target.value = value
                   dispatch(setGeneratePrompt2(value))
                   localStorage.setItem('generate_prompt_2', value)
                 }
@@ -200,18 +200,18 @@ export function PromptPanel() {
 
                   console.log(`tokens: `, tokens)
                   let value = e.target.value
-                  for (const tk of tokens) {
-                    console.log(`tk: ${tk}`)
-                    console.log(`tk.slice(1, tk.length - 1): ${tk.slice(1, tk.length - 1)}`)
-                    // value = e.target.value.replaceAll(tk.slice(1, tk.length - 1), ` ${tk}`)
+                  // for (const tk of tokens) {
+                  //   console.log(`tk: ${tk}`)
+                  //   console.log(`tk.slice(1, tk.length - 1): ${tk.slice(1, tk.length - 1)}`)
+                  //   // value = e.target.value.replaceAll(tk.slice(1, tk.length - 1), ` ${tk}`)
 
-                    value = value.replace(
-                      new RegExp(`[^<\\W]?(${tk.slice(1, tk.length - 1)})[^>]`),
-                      '<$1>'
-                    )
-                  }
+                  //   value = value.replace(
+                  //     new RegExp(`[^<\\W]?(${tk.slice(1, tk.length - 1)})[^>]`),
+                  //     '<$1>'
+                  //   )
+                  // }
                   console.log(`value: ${value}`)
-                  e.target.value = value
+                  // e.target.value = value
                   dispatch(setGenerateNegativePrompt2(value))
                   localStorage.setItem('generate_negative_prompt2', value)
                 }
@@ -234,18 +234,18 @@ export function PromptPanel() {
 
                   console.log(`tokens: `, tokens)
                   let value = e.target.value
-                  for (const tk of tokens) {
-                    console.log(`tk: ${tk}`)
-                    console.log(`tk.slice(1, tk.length - 1): ${tk.slice(1, tk.length - 1)}`)
-                    // value = e.target.value.replaceAll(tk.slice(1, tk.length - 1), ` ${tk}`)
+                  // for (const tk of tokens) {
+                  //   console.log(`tk: ${tk}`)
+                  //   console.log(`tk.slice(1, tk.length - 1): ${tk.slice(1, tk.length - 1)}`)
+                  //   // value = e.target.value.replaceAll(tk.slice(1, tk.length - 1), ` ${tk}`)
 
-                    value = value.replace(
-                      new RegExp(`[^<\\W]?(${tk.slice(1, tk.length - 1)})[^>]`),
-                      '<$1>'
-                    )
-                  }
+                  //   value = value.replace(
+                  //     new RegExp(`[^<\\W]?(${tk.slice(1, tk.length - 1)})[^>]`),
+                  //     '<$1>'
+                  //   )
+                  // }
                   console.log(`value: ${value}`)
-                  e.target.value = value
+                  // e.target.value = value
                   dispatch(setImg2imgPrompt(value))
                   localStorage.setItem('img2img_prompt', value)
                 }
@@ -264,18 +264,18 @@ export function PromptPanel() {
 
                   console.log(`tokens: `, tokens)
                   let value = e.target.value
-                  for (const tk of tokens) {
-                    console.log(`tk: ${tk}`)
-                    console.log(`tk.slice(1, tk.length - 1): ${tk.slice(1, tk.length - 1)}`)
-                    // value = e.target.value.replaceAll(tk.slice(1, tk.length - 1), ` ${tk}`)
+                  // for (const tk of tokens) {
+                  //   console.log(`tk: ${tk}`)
+                  //   console.log(`tk.slice(1, tk.length - 1): ${tk.slice(1, tk.length - 1)}`)
+                  //   // value = e.target.value.replaceAll(tk.slice(1, tk.length - 1), ` ${tk}`)
 
-                    value = value.replace(
-                      new RegExp(`[^<\\W]?(${tk.slice(1, tk.length - 1)})[^>]`),
-                      '<$1>'
-                    )
-                  }
+                  //   value = value.replace(
+                  //     new RegExp(`[^<\\W]?(${tk.slice(1, tk.length - 1)})[^>]`),
+                  //     '<$1>'
+                  //   )
+                  // }
                   console.log(`value: ${value}`)
-                  e.target.value = value
+                  // e.target.value = value
                   dispatch(setImg2imgNegativePrompt(value))
                   localStorage.setItem('img2img_negative_prompt', value)
                 }
@@ -295,18 +295,18 @@ export function PromptPanel() {
 
                   console.log(`tokens: `, tokens)
                   let value = e.target.value
-                  for (const tk of tokens) {
-                    console.log(`tk: ${tk}`)
-                    console.log(`tk.slice(1, tk.length - 1): ${tk.slice(1, tk.length - 1)}`)
-                    // value = e.target.value.replaceAll(tk.slice(1, tk.length - 1), ` ${tk}`)
+                  // for (const tk of tokens) {
+                  //   console.log(`tk: ${tk}`)
+                  //   console.log(`tk.slice(1, tk.length - 1): ${tk.slice(1, tk.length - 1)}`)
+                  //   // value = e.target.value.replaceAll(tk.slice(1, tk.length - 1), ` ${tk}`)
 
-                    value = value.replace(
-                      new RegExp(`[^<\\W]?(${tk.slice(1, tk.length - 1)})[^>]`),
-                      '<$1>'
-                    )
-                  }
+                  //   value = value.replace(
+                  //     new RegExp(`[^<\\W]?(${tk.slice(1, tk.length - 1)})[^>]`),
+                  //     '<$1>'
+                  //   )
+                  // }
                   console.log(`value: ${value}`)
-                  e.target.value = value
+                  // e.target.value = value
                   dispatch(setImg2imgPrompt2(value))
                   localStorage.setItem('img2img_prompt_2', value)
                 }
@@ -325,18 +325,18 @@ export function PromptPanel() {
 
                   console.log(`tokens: `, tokens)
                   let value = e.target.value
-                  for (const tk of tokens) {
-                    console.log(`tk: ${tk}`)
-                    console.log(`tk.slice(1, tk.length - 1): ${tk.slice(1, tk.length - 1)}`)
-                    // value = e.target.value.replaceAll(tk.slice(1, tk.length - 1), ` ${tk}`)
+                  // for (const tk of tokens) {
+                  //   console.log(`tk: ${tk}`)
+                  //   console.log(`tk.slice(1, tk.length - 1): ${tk.slice(1, tk.length - 1)}`)
+                  //   // value = e.target.value.replaceAll(tk.slice(1, tk.length - 1), ` ${tk}`)
 
-                    value = value.replace(
-                      new RegExp(`[^<\\W]?(${tk.slice(1, tk.length - 1)})[^>]`),
-                      '<$1>'
-                    )
-                  }
+                  //   value = value.replace(
+                  //     new RegExp(`[^<\\W]?(${tk.slice(1, tk.length - 1)})[^>]`),
+                  //     '<$1>'
+                  //   )
+                  // }
                   console.log(`value: ${value}`)
-                  e.target.value = value
+                  // e.target.value = value
                   dispatch(setImg2imgNegativePrompt2(value))
                   localStorage.setItem('img2img_negative_prompt_2', value)
                 }
@@ -359,18 +359,18 @@ export function PromptPanel() {
 
                   console.log(`tokens: `, tokens)
                   let value = e.target.value
-                  for (const tk of tokens) {
-                    console.log(`tk: ${tk}`)
-                    console.log(`tk.slice(1, tk.length - 1): ${tk.slice(1, tk.length - 1)}`)
-                    // value = e.target.value.replaceAll(tk.slice(1, tk.length - 1), ` ${tk}`)
+                  // for (const tk of tokens) {
+                  //   console.log(`tk: ${tk}`)
+                  //   console.log(`tk.slice(1, tk.length - 1): ${tk.slice(1, tk.length - 1)}`)
+                  //   // value = e.target.value.replaceAll(tk.slice(1, tk.length - 1), ` ${tk}`)
 
-                    value = value.replace(
-                      new RegExp(`[^<\\W]?(${tk.slice(1, tk.length - 1)})[^>]`),
-                      '<$1>'
-                    )
-                  }
+                  //   value = value.replace(
+                  //     new RegExp(`[^<\\W]?(${tk.slice(1, tk.length - 1)})[^>]`),
+                  //     '<$1>'
+                  //   )
+                  // }
                   console.log(`value: ${value}`)
-                  e.target.value = value
+                  // e.target.value = value
                   dispatch(setInpaintPrompt(value))
                   localStorage.setItem('inpaint_prompt', value)
                 }
@@ -389,18 +389,18 @@ export function PromptPanel() {
 
                   console.log(`tokens: `, tokens)
                   let value = e.target.value
-                  for (const tk of tokens) {
-                    console.log(`tk: ${tk}`)
-                    console.log(`tk.slice(1, tk.length - 1): ${tk.slice(1, tk.length - 1)}`)
-                    // value = e.target.value.replaceAll(tk.slice(1, tk.length - 1), ` ${tk}`)
+                  // for (const tk of tokens) {
+                  //   console.log(`tk: ${tk}`)
+                  //   console.log(`tk.slice(1, tk.length - 1): ${tk.slice(1, tk.length - 1)}`)
+                  //   // value = e.target.value.replaceAll(tk.slice(1, tk.length - 1), ` ${tk}`)
 
-                    value = value.replace(
-                      new RegExp(`[^<\\W]?(${tk.slice(1, tk.length - 1)})[^>]`),
-                      '<$1>'
-                    )
-                  }
+                  //   value = value.replace(
+                  //     new RegExp(`[^<\\W]?(${tk.slice(1, tk.length - 1)})[^>]`),
+                  //     '<$1>'
+                  //   )
+                  // }
                   console.log(`value: ${value}`)
-                  e.target.value = value
+                  // e.target.value = value
                   dispatch(setInpaintNegativePrompt(value))
                   localStorage.setItem('inpaint_negative_prompt', value)
                 }
@@ -419,18 +419,18 @@ export function PromptPanel() {
 
                   console.log(`tokens: `, tokens)
                   let value = e.target.value
-                  for (const tk of tokens) {
-                    console.log(`tk: ${tk}`)
-                    console.log(`tk.slice(1, tk.length - 1): ${tk.slice(1, tk.length - 1)}`)
-                    // value = e.target.value.replaceAll(tk.slice(1, tk.length - 1), ` ${tk}`)
+                  // for (const tk of tokens) {
+                  //   console.log(`tk: ${tk}`)
+                  //   console.log(`tk.slice(1, tk.length - 1): ${tk.slice(1, tk.length - 1)}`)
+                  //   // value = e.target.value.replaceAll(tk.slice(1, tk.length - 1), ` ${tk}`)
 
-                    value = value.replace(
-                      new RegExp(`[^<\\W]?(${tk.slice(1, tk.length - 1)})[^>]`),
-                      '<$1>'
-                    )
-                  }
+                  //   value = value.replace(
+                  //     new RegExp(`[^<\\W]?(${tk.slice(1, tk.length - 1)})[^>]`),
+                  //     '<$1>'
+                  //   )
+                  // }
                   console.log(`value: ${value}`)
-                  e.target.value = value
+                  // e.target.value = value
                   dispatch(setInpaintPrompt2(value))
                   localStorage.setItem('inpaint_prompt_2', value)
                 }
@@ -449,18 +449,18 @@ export function PromptPanel() {
 
                   console.log(`tokens: `, tokens)
                   let value = e.target.value
-                  for (const tk of tokens) {
-                    console.log(`tk: ${tk}`)
-                    console.log(`tk.slice(1, tk.length - 1): ${tk.slice(1, tk.length - 1)}`)
-                    // value = e.target.value.replaceAll(tk.slice(1, tk.length - 1), ` ${tk}`)
+                  // for (const tk of tokens) {
+                  //   console.log(`tk: ${tk}`)
+                  //   console.log(`tk.slice(1, tk.length - 1): ${tk.slice(1, tk.length - 1)}`)
+                  //   // value = e.target.value.replaceAll(tk.slice(1, tk.length - 1), ` ${tk}`)
 
-                    value = value.replace(
-                      new RegExp(`[^<\\W]?(${tk.slice(1, tk.length - 1)})[^>]`),
-                      '<$1>'
-                    )
-                  }
+                  //   value = value.replace(
+                  //     new RegExp(`[^<\\W]?(${tk.slice(1, tk.length - 1)})[^>]`),
+                  //     '<$1>'
+                  //   )
+                  // }
                   console.log(`value: ${value}`)
-                  e.target.value = value
+                  // e.target.value = value
                   dispatch(setInpaintNegativePrompt2(value))
                   localStorage.setItem('inpaint_negative_prompt_2', value)
                 }

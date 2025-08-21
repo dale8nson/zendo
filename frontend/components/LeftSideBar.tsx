@@ -40,6 +40,8 @@ export const LeftSideBar = () => {
   const [trainSteps, setTrainSteps] = useState<number>(100)
   const [repeats, setRepeats] = useState(100)
   const [lr, setLr] = useState<number>(1e-4)
+  const [resetOptim, setResetOptim] = useState(false)
+  const [resetLrScheduler, setResetLrScheduler] = useState(false)
 
   const debounce = useRef(false)
 
@@ -142,6 +144,8 @@ export const LeftSideBar = () => {
       num_training_steps: trainSteps,
       repeats: trainSteps,
       lr,
+      reset_optim: resetOptim,
+      reset_lr_scheduler: resetLrScheduler,
     }
 
     ws.onerror = (event) => {
@@ -290,6 +294,22 @@ export const LeftSideBar = () => {
                 setLr(Number(e.target.value))
               }}
             />
+            <div className="flex items-center space-x-2">
+              <input
+                id="resetLrScheduler"
+                type="checkbox"
+                checked={resetLrScheduler}
+                onChange={(e) => setResetLrScheduler(e.target.checked)}
+              />
+              <label htmlFor="resetOptim">Reset LR Scheduler</label>
+              <input
+                id="resetOptim"
+                type="checkbox"
+                checked={resetOptim}
+                onChange={(e) => setResetOptim(e.target.checked)}
+              />
+              <label htmlFor="resetOptim">Reset Optimizer</label>
+            </div>
             <Button onClick={() => trainHandler()}>Train</Button>
           </AccordionContent>
         </AccordionItem>

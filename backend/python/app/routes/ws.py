@@ -16,6 +16,7 @@ import os
 import json
 import re
 from io import BytesIO
+import threading
 
 
 manager = ConnectionManager()
@@ -32,10 +33,12 @@ class CallBack:
         timestep_value = timesteps.item() if hasattr(timesteps, "item") else timesteps
         step_value = step_index.item() if hasattr(step_index, "item") else step_index
         print(f"Step {step_index}, Timestep {timesteps}")
-        asyncio.create_task(self.send({"step": step_value, "timestep": timestep_value}))
+        asyncio.run(self.send({"step": step_value, "timestep": timestep_value}))
+
         return {"step": step_value, "timestep": timestep_value}
 
-    def __call__(self, pipeline, step_index, timestep, callback_kwargs) -> Dict[str, Any]:
+    async def __call__(self, pipeline, step_index, timestep, callback_kwargs) -> Dict[str, Any]:
+
         return self.callback_fn(pipeline, step_index, timestep)
 
 
@@ -200,7 +203,7 @@ async def train_ws(ws: WebSocket):
     try:
         async for message in ws.iter_json():
             await ws.send_json({"status": "started"})
-            response = await train(collection=message["collection"], token=message["token"], initializer_token=message["initializer_token"], max_train_steps=message["max_train_steps"], num_training_steps=message["num_training_steps"], repeats=message["repeats"], lr=message["lr"])
+            response = await train(collection=message["collection"], token=message["token"], initializer_token=message["initializer_token"], max_train_steps=message["max_train_steps"], num_training_steps=message["num_training_steps"], repeats=message["repeats"], lr=message["lr"], reset_optimizer=message['reset_optim'], reset_lr_scheduler=message['reset_lr_scheduler'])
 
             await ws.send_json(response)
 

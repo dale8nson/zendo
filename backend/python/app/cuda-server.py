@@ -1,12 +1,12 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from .routes import upload, metadata, predict, caption, score, masks, ws, dataset
+from .routes import upload, metadata, predict, caption, score, masks, ws, dataset, generate, refine, inpaint
 from fastapi.responses import FileResponse
 import os
 from contextlib import asynccontextmanager
-from .services.clip_model import init_clip
-from .services.SAM import init_SAM
-from app.services.connection_manager import ConnectionManager
+# from .services.clip_model import init_clip
+# from .services.SAM import init_SAM
+
 import torch
 
 @asynccontextmanager
@@ -27,8 +27,11 @@ app.add_middleware(
 
 cwd = os.getcwd()
 
-app.include_router(predict.router, prefix="/api")
-app.include_router(score.router, prefix="/api")
-app.include_router(masks.router, prefix="/api")
+# app.include_router(predict.router, prefix="/api")
+# app.include_router(score.router, prefix="/api")
+# app.include_router(masks.router, prefix="/api")
 app.include_router(dataset.router, prefix="/api")
+app.include_router(generate.router, prefix="/api")
+app.include_router(refine.router, prefix="/api")
+app.include_router(inpaint.router, prefix="/api")
 app.include_router(ws.router, prefix="/ws")

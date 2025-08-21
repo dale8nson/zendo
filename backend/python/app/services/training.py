@@ -2,9 +2,12 @@ import torch
 import torch.nn.functional as F
 from torch.optim.lr_scheduler import LRScheduler
 from torch.optim.optimizer import Optimizer
-import torchvision.transforms as T
+import torchvision.transforms.v2 as T
+from torchvision.transforms.v2 import functional as TVF
 from torch.utils.data import Dataset
 from torchvision import transforms
+from torchvision import tv_tensors
+from torchvision.transforms import InterpolationMode
 from safetensors.torch import save_file, load_file
 from transformers import CLIPTokenizer, CLIPTextModelWithProjection, CLIPTextModel, get_scheduler
 from diffusers import StableDiffusionXLPipeline, StableDiffusionXLImg2ImgPipeline, DiffusionPipeline
@@ -29,7 +32,8 @@ import inspect
 import gc
 from datetime import datetime, timezone
 import asyncio
-import concurrent.futures
+from numbers import Number
+
 
 from diffusers import (
     AutoencoderKL,
@@ -104,11 +108,6 @@ def resize_image(image, size=1024):
 def generate_images(image, bg, bbox, mask, size=1024):
     global step
     size = 1024
-
-    image.save(os.path.join(os.getcwd(), "app/test_images/dataset-image-original.png"))
-    mask.save(os.path.join(os.getcwd(), "app/test_images/dataset-mask-original.png"))
-    bg.save(os.path.join(os.getcwd(), "app/test_images/dataset-bg-original.png"))
-
 
     print(f"image: {image}")
     print(f"bg: {bg}")
@@ -579,7 +578,19 @@ class CustomPromptDataset(TextualInversionDataset):
         example["pixel_values"] = torch.from_numpy(image).permute(2, 0, 1)
         return example
 
-
+class SyncCanvasSize:
+    """If Image and BoundingBoxes disagree on HxW by 1px, fix boxes.canvas_size."""
+    def __call__(self, img, boxes):
+        # img is tv_tensors.Image after ToImage()
+        H, W = img.shape[-2], img.shape[-1]
+        bH, bW = boxes.canvas_size
+        if (bH, bW) != (H, W):
+            boxes = tv_tensors.BoundingBoxes(
+                boxes.as_tensor(),
+                format=boxes.format,
+                canvas_size=(H, W)
+            )
+        return img, boxes
 
 class RandomImageDataset(Dataset):
 
@@ -587,12 +598,15 @@ class RandomImageDataset(Dataset):
 
         self._mirror = False
 
+        base_tokens = initializer_token.split(' ')
+
+
         self._data_path = os.path.join(os.getcwd(), f'../models/user/{collection}/datasets/{placeholder_token}')
         self._filenames = os.listdir(self._data_path)
 
 
         self._placeholder_token = placeholder_token
-        self._initializer_token = initializer_token
+        self._base_tokens = base_tokens
         self._repeats = repeats
         self._size = size
         self._tokenizer_1 = tokenizer_1
@@ -625,21 +639,23 @@ class RandomImageDataset(Dataset):
                 continue
 
         print(f"training prompt: {prompt}")
+        example['prompt'] = prompt
 
         image = Image.open(os.path.join(self._data_path, filename)).convert("RGB")
 
         bbox = self._captions[filename]['bbox']
         x1, y1, x2, y2 = bbox
 
-        if self._mirror:
-            bbox = (image.width - x2, y1, image.width - x1, y2)
-
         choices = random.choice(transform_functions)
         for t in choices:
+            if self._mirror:
+                bbox = (image.width - x2, y1, image.width - x1, y2)
             image = t(image)
 
+        # image, bbox = self.compose(image, bbox)
         image = self.crop(image, bbox)
 
+        example['token'] = self._placeholder_token
         example["original_size"] = (image.height, image.width)
         example["crop_top_left"] = (0, 0)
         example["input_ids_1"] = self._tokenizer_1(
@@ -665,7 +681,86 @@ class RandomImageDataset(Dataset):
         example["pixel_values"] = torch.from_numpy(image).permute(2, 0, 1)
         print(f"example[\"pixel_values\"].size(): {example['pixel_values'].size()}")
 
+        self._mirror = False
+
         return example
+
+    def compose(self, image, bbox: list[Any]):
+
+
+        augment = T.Compose([
+            T.ToImage(),
+            # geometry first
+            T.RandomHorizontalFlip(p=0.5),
+            T.RandomRotation(degrees=(-5, 5), expand=True,
+                             fill={tv_tensors.Image: 127}),  # mid-gray corners
+            T.RandomAffine(degrees=(-5, 5), translate=(0.02, 0.02),
+                               interpolation=InterpolationMode.BILINEAR),
+
+            # keep the object in-frame via IoU-aware crop (optional but handy)
+            T.RandomIoUCrop(min_scale=0.7, max_scale=1.0,
+                            sampler_options=[0.5, 0.7, 0.9, 1.0]),
+            SyncCanvasSize(),
+            T.ClampBoundingBoxes(),           # clip to image bounds
+            T.SanitizeBoundingBoxes(),        # drop degenerate boxes
+
+            # photometric second
+            T.ColorJitter(0.08, 0.08, 0.08, 0.02),
+            T.GaussianBlur(3),
+            T.RandomAdjustSharpness(2, p=0.3),
+
+            # final size for SD/SDXL
+            T.Resize((self._size, self._size), interpolation=InterpolationMode.BICUBIC, antialias=True),
+        ])
+
+        # image = tv_tensors.Image(image)
+
+        image = TVF.pil_to_tensor(image)
+        print(f'image.shape: {image.shape}')
+
+        # H, W = image.shape[-2], image.shape[-1]
+
+        # boxes = tv_tensors.BoundingBoxes(
+        #     data=[bbox],
+        #     format="XYXY",
+        #     canvas_size=(H, W)
+        # )
+
+        # labels = torch.tensor([1], dtype=torch.int64)        # dummy or real class id(s)
+
+        # sample = {"image": image, "boxes": boxes, "labels": labels}
+
+        # ops = T.Compose([
+        #     T.ToImage(),
+        #     T.RandomHorizontalFlip(p=0.5),
+        #     T.RandomAffine(degrees=(-5,5), translate=(0.02,0.02),
+        #                    interpolation=InterpolationMode.BILINEAR),  # size-stable
+        #     T.RandomIoUCrop(min_scale=0.7, max_scale=1.0,
+        #                     sampler_options=[0.5, 0.7, 0.9, 1.0]),
+        #     T.ClampBoundingBoxes(),
+        #     T.SanitizeBoundingBoxes(),   # now it can drop boxes *and* labels together
+        #     # …photometric augs, then your final Resize…
+        # ])
+
+        # out = ops(sample)
+        # image, bbox, labels = out["image"], out["boxes"], out["labels"]
+
+        # for i, op in enumerate(ops, 1):
+        #     print(f'op: {type(op).__name__}')
+        #     image, boxes = op(image, boxes)
+        #     print(f'image.shape: {image.shape}')
+        #     print(f'boxes.shape: {boxes.shape}')
+        #     H, W = image.shape[-2], image.shape[-1]
+        #     if tuple(boxes.canvas_size) != (H, W):
+        #         print(f"Drift after op {i}: {type(op).__name__} -> "
+        #               f"img {(H,W)} vs boxes {tuple(boxes.canvas_size)}")
+        #         # quick fix in-line:
+        #         boxes = tv_tensors.BoundingBoxes(boxes.as_tensor(), format=boxes.format, canvas_size=(H, W))
+
+        # img_out, bbox = augment(image, boxes)
+        image = T.ToPILImage()(image)
+        print(f'bbox: {bbox}')
+        return image, bbox
 
     def blur(self, image):
         return image.filter(ImageFilter.GaussianBlur(random.randint(1, 5)))
@@ -775,7 +870,7 @@ def save_progress(tokenizer, tokenizer_2, text_encoder, text_encoder_2, token: s
     save_file(f, save_path_2, {'format': 'pt'})
 
 
-async def validate(collection: str, data: Dict[str, Any], inference_steps: int, guidance_scale: float, step: int):
+async def validate(collection: str, token: str, inference_steps: int, guidance_scale: float, validation_prompt: str, step: int):
 
     pipe = await get_pipe()
     if pipe is None:
@@ -789,24 +884,32 @@ async def validate(collection: str, data: Dict[str, Any], inference_steps: int, 
         refiner = await get_refiner()
         refiner = cast(StableDiffusionXLImg2ImgPipeline, refiner)
 
-
     model_path = os.path.join(os.getcwd(), f"../models/user/{collection}")
 
     for file in [f'{collection}.safetensors', f'{collection}_2.safetensors']:
         path = os.path.join(model_path, file)
         pipe.load_textual_inversion(path)
 
-    image = pipe(prompt=data['prompt'], num_inference_steps=inference_steps, guidance_scale=guidance_scale, width=1024, height=1024, denoising_end=0.8, output_type='latent').images[0]
+    print(f'Validating step {step}...')
+    image = pipe(prompt=validation_prompt, num_inference_steps=inference_steps, guidance_scale=guidance_scale, width=1024, height=1024, denoising_end=0.8, output_type='latent').images[0]
 
-    image = refiner(prompt=data['prompt'], num_inference_steps=inference_steps, denoising_start=0.8, image=image).images[0]
+    image = refiner(prompt=validation_prompt, num_inference_steps=inference_steps, denoising_start=0.8, image=image).images[0]
 
     validation_path = os.path.join(model_path, 'validation_images')
 
     os.makedirs(validation_path, exist_ok=True)
-    save_path = os.path.join(validation_path, f'{data["token"]}-step-{step}.png')
+    save_path = os.path.join(validation_path, f'{token}-step-{step}.png')
 
     image = image.convert("RGBA")
     image.save(save_path)
+
+    pipe.to('cpu')
+    pipe = None
+
+    refiner.to('cpu')
+    refiner = None
+
+    print('Validation complete.')
 
 
 async def train(
@@ -829,11 +932,15 @@ async def train(
     validation_steps=100,
     batch_size=1,
     num_workers=0,
+    reset_optimizer=False,
+    reset_lr_scheduler=False,
+    validation_prompt:str | None=None
 ):
 
     device = torch.device("mps" if torch.backends.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu")
     num_processes = 1
     accelerator = None
+    tasks = set()
 
     refiner = await get_refiner()
 
@@ -914,12 +1021,16 @@ async def train(
     tokenizer_1.add_tokens(placeholder_tokens)
     tokenizer_2.add_tokens(placeholder_tokens)
 
-    token_ids = tokenizer_1.encode(initializer_token, add_special_tokens=False)
-    token_ids_2 = tokenizer_2.encode(initializer_token, add_special_tokens=False)
+    base_tokens = initializer_token.split(' ')
 
-    initializer_token_id = token_ids[0]
+    token_ids = tokenizer_1.encode(base_tokens, add_special_tokens=False)
+    token_ids_2 = tokenizer_2.encode(base_tokens, add_special_tokens=False)
+
+    initializer_token_ids = token_ids
+    print(f'initializer_token_ids: {initializer_token_ids}')
     placeholder_token_ids = tokenizer_1.convert_tokens_to_ids(placeholder_tokens)
-    initializer_token_id_2 = token_ids_2[0]
+    initializer_token_ids_2 = token_ids_2
+    print(f'initializer_token_ids_2: {initializer_token_ids_2}')
     placeholder_token_ids_2 = tokenizer_2.convert_tokens_to_ids(placeholder_tokens)
 
     text_encoder_1.resize_token_embeddings(len(tokenizer_1))
@@ -930,11 +1041,22 @@ async def train(
 
     with torch.no_grad():
 
+        initial_embed_1 = torch.zeros(768)
+        initial_embed_2 = torch.zeros(1280)
+
+        for id in initializer_token_ids:
+            emb = token_embeds[id]
+            torch.add(initial_embed_1, emb, alpha= 1 / len(initializer_token_ids))
+
+        for id in initializer_token_ids_2:
+            emb = token_embeds_2[id]
+            torch.add(initial_embed_2, emb, alpha= 1 / len(initializer_token_ids_2))
+
         for token_id in placeholder_token_ids:
-             token_embeds[token_id] = token_embeds[initializer_token_id].clone()
+             token_embeds[token_id] = initial_embed_1
 
         for token_id in placeholder_token_ids_2:
-             token_embeds_2[token_id] = token_embeds_2[initializer_token_id_2].clone()
+            token_embeds_2[token_id] = initial_embed_2
 
 
     text_encoder_1.text_model.encoder.requires_grad_(False)
@@ -1026,6 +1148,17 @@ async def train(
             checkpoint = torch.load(os.path.join(output_dir, path))
             token_embeds.to(device)
             token_embeds_2.to(device)
+
+            # path = os.path.join(os.getcwd(), f'../models/user/{collection}/captions.json')
+
+            # emb1 = checkpoint['emb1'].to(device)
+            # emb2 = checkpoint['emb2'].to(device)
+            # init_tks = checkpoint['intializer_token'].split(' ')
+
+            # composite_emb_1 = torch.zeros(emb1.shape)
+            # composite_emb_2 = torch.zeros(emb2.shape)
+
+
             checkpoint['emb1'].to(device, dtype=torch.float32)
             checkpoint['emb2'].to(device, dtype=torch.float32)
             token_embeds[token_ids] = checkpoint['emb1']
@@ -1037,7 +1170,8 @@ async def train(
 
             optimizer = torch.optim.AdamW(list(text_encoder_1.parameters()) + list(text_encoder_2.parameters()), lr=lr)
 
-            optimizer.load_state_dict(checkpoint["optimizer"])
+            if not reset_optimizer:
+                optimizer.load_state_dict(checkpoint["optimizer"])
 
             first_epoch = global_step // num_update_steps_per_epoch
 
@@ -1051,7 +1185,7 @@ async def train(
         num_training_steps=num_training_steps_for_scheduler,
     )
 
-    if checkpoint is not None:
+    if checkpoint is not None and not reset_lr_scheduler:
         lr_scheduler.load_state_dict(checkpoint["lr_scheduler"])
 
     text_encoder_1.train()
@@ -1354,9 +1488,25 @@ async def train(
                     logs = {"loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0]}
                     progress_bar.set_postfix(**logs)
 
-                    # data = train_dataset[random.randint(0, len(train_dataset))]
+                    if validation_prompt is None:
+                        data = train_dataset[random.randint(0, len(train_dataset))]
+                        token = data['token']
+                        validation_prompt = data['prompt']
 
-                    # validate(collection=collection, data=data, inference_steps=15, guidance_scale=7.5, step=global_step)
+                    validation_prompt = cast(str, validation_prompt)
+
+                    if torch.backends.mps.is_available():
+                        torch.mps.empty_cache()
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+
+                    try:
+                        task = asyncio.create_task(validate(collection=collection, token=token, inference_steps=15, guidance_scale=7.5, step=global_step, validation_prompt=validation_prompt))
+                        tasks.add(task)
+                        task.add_done_callback(tasks.discard)
+
+                    except Exception as e:
+                        print(e)
 
                     print(f"Global step: {global_step}, loss: {loss.detach().item():.4f}")
 
@@ -1367,22 +1517,54 @@ async def train(
 
             save_progress(tokenizer=tokenizer_1, tokenizer_2=tokenizer_2, text_encoder=text_encoder_1, text_encoder_2=text_encoder_2, token=token, weight_name=collection, output_dir=output_dir, step=global_step, optimizer=optimizer, lr_scheduler=lr_scheduler)
 
+            if validation_prompt is None:
+                data = train_dataset[random.randint(0, len(train_dataset))]
+                token = data['token']
+                validation_prompt = data['prompt']
+
+            validation_prompt = cast(str, validation_prompt)
+
+            if torch.backends.mps.is_available():
+                torch.mps.empty_cache()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+
+            try:
+                task = asyncio.create_task(validate(collection=collection, token=token, inference_steps=15, guidance_scale=7.5, step=global_step, validation_prompt=validation_prompt))
+                tasks.add(task)
+                task.add_done_callback(tasks.discard)
+
+            except Exception as e:
+                print(e)
+
             raise e
 
         save_progress(tokenizer=tokenizer_1, tokenizer_2=tokenizer_2, text_encoder=text_encoder_1, text_encoder_2=text_encoder_2, token=token, weight_name=collection, output_dir=output_dir, step=global_step, optimizer=optimizer, lr_scheduler=lr_scheduler)
 
-        # data = train_dataset[random.randint(0, len(train_dataset))]
+        if validation_prompt is None:
+            data = train_dataset[random.randint(0, len(train_dataset))]
+            token = data['token']
+            validation_prompt = data['prompt']
 
-        # loop = asyncio.get_running_loop()
-
-        # with concurrent.futures.ThreadPoolExecutor() as pool:
-        #         await loop.run_in_executor(
-        #             pool, validate(collection=collection, data=data, inference_steps=15, guidance_scale=7.5, step=global_step))
-
+        validation_prompt = cast(str, validation_prompt)
 
         if torch.backends.mps.is_available():
             torch.mps.empty_cache()
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
+
+        try:
+            task = asyncio.create_task(validate(collection=collection, token=token, inference_steps=15, guidance_scale=7.5, step=global_step, validation_prompt=validation_prompt))
+            tasks.add(task)
+            task.add_done_callback(tasks.discard)
+
+        except Exception as e:
+            print(e)
+
+
+
+
+        # for task in tasks:
+        #     await task
 
         return {"status":"OK"}

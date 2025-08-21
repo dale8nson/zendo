@@ -74,7 +74,7 @@ const generate = async (
 
   console.log(`body: ${body}`)
 
-  const response = await fetch('http://10.0.0.22:8002/api/generate', {
+  const response = await fetch('http://127.0.0.1:8001/api/generate', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

@@ -109,17 +109,18 @@ export function Preview() {
       const image = layerImages[currentHistoryIndex][index]
       const layer = layerHistory[currentHistoryIndex][index]
 
+      const [x1, y1, x2, y2] = layer.history[layer.currentLayerHistoryIndex].bbox as Array<number>
+
+      let [x, y, w, h] = [x1, y1, x2 - x1, y2 - y1]
+
       if (!layer.visible) continue
       const size = Math.min(canv.width, canv.height)
-      const scaleX = size / image.width
-      const scaleY = size / image.height
+      const scaleX = size / w
+      const scaleY = size / h
       const scale = Math.min(scaleX, scaleY)
 
       ctx.globalAlpha = layer.opacity
-
-      const [x1, y1, x2, y2] = layer.history[layer.currentLayerHistoryIndex].bbox as Array<number>
-
-      let [x, y, w, h] = [x1, y1, x2 - x1, y2 - y1].map((n) => n * scale)
+      ;[x, y, w, h] = [x, y, w, h].map((n) => n * scale)
 
       ctx.drawImage(image, 0, 0, image.width, image.height, x, y, w, h)
     }
@@ -572,7 +573,7 @@ export function Preview() {
       drawSelectionBox()
     })
 
-    // observer.observe(canv)
+    observer.observe(canv)
 
     return () => {
       observer.disconnect()
@@ -739,7 +740,7 @@ export function Preview() {
             <ContextMenuTrigger>
               <canvas
                 ref={canvasRef}
-                className="relative w-full h-full cursor-crosshair aspect-square"
+                className="relative w-full h-full cursor-crosshair object-contain border-red-500 border-2"
                 width={1024}
                 height={1024}
                 onPointerDown={pointerDown}
