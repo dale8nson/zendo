@@ -646,11 +646,11 @@ class RandomImageDataset(Dataset):
         bbox = self._captions[filename]['bbox']
         x1, y1, x2, y2 = bbox
 
-        choices = random.choice(transform_functions)
-        for t in choices:
-            if self._mirror:
-                bbox = (image.width - x2, y1, image.width - x1, y2)
-            image = t(image)
+        # choices = random.choice(transform_functions)
+        # for t in choices:
+        #     if self._mirror:
+        #         bbox = (image.width - x2, y1, image.width - x1, y2)
+        #     image = t(image)
 
         # image, bbox = self.compose(image, bbox)
         image = self.crop(image, bbox)

@@ -37,6 +37,11 @@ cwd = os.getcwd()
 print(f"cwd:{cwd}")
 test_filepath = "app/test_images" if cwd.endswith("python") else "../test_images"
 
+def is_available():
+    return False
+
+torch.cuda.is_available = is_available
+
 device = torch.device("mps" if torch.backends.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu")
 
 pipe = None

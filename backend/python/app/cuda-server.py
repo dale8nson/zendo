@@ -1,6 +1,6 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from .routes import upload, metadata, predict, caption, score, masks, ws, dataset, generate, refine, inpaint
+from .routes import ws, generate, refine, inpaint
 from fastapi.responses import FileResponse
 import os
 from contextlib import asynccontextmanager
@@ -30,7 +30,6 @@ cwd = os.getcwd()
 # app.include_router(predict.router, prefix="/api")
 # app.include_router(score.router, prefix="/api")
 # app.include_router(masks.router, prefix="/api")
-app.include_router(dataset.router, prefix="/api")
 app.include_router(generate.router, prefix="/api")
 app.include_router(refine.router, prefix="/api")
 app.include_router(inpaint.router, prefix="/api")
