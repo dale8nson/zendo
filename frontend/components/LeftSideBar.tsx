@@ -346,6 +346,7 @@ export const LeftSideBar = () => {
         }
 
         dispatch(setSelectedImage({ ...meta }))
+        dispatch(setCaptionScore(calculateCaptionScore(meta))) 
         toast.success('Edge detection complete')
       } catch (err) {
         console.error('detectEdges error', err)
