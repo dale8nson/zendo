@@ -277,20 +277,17 @@ export const LeftSideBar = () => {
   }
 
   const upscale = async () => {
-    if (!layerHistory || !layerHistory[currentHistoryIndex]) return
-    const layers = layerHistory[currentHistoryIndex]
-    const body = JSON.stringify({
-      layers: layers,
-    })
-
-    const response = await fetch('http://localhost:8000/api/upscale', {
+    if (!selectedImage?.image_data) return
+    
+    const response = await fetch('http://localhost:8000/api/image/upscale', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body,
+      body: JSON.stringify({ image_data: selectedImage.image_data }),
       cache: 'no-cache',
     })
+    
     const { bbox, image_data: imageData } = await response.json()
     dispatch(newImage({ bbox, imageData }))
   }
