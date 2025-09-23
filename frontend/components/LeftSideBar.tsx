@@ -276,6 +276,25 @@ export const LeftSideBar = () => {
     dispatch(setSelectedImage({ ...meta }))
   }
 
+  const upscale = async () => {
+    if (!layerHistory || !layerHistory[currentHistoryIndex]) return
+    const layers = layerHistory[currentHistoryIndex]
+    const body = JSON.stringify({
+      layers: layers,
+    })
+
+    const response = await fetch('http://localhost:8000/api/upscale', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body,
+      cache: 'no-cache',
+    })
+    const { bbox, image_data: imageData } = await response.json()
+    dispatch(newImage({ bbox, imageData }))
+  }
+
   useEffect(() => {
     // loadEmbeddings(collection, token)
     console.log(`collection changed to ${collection}`)
@@ -380,6 +399,7 @@ export const LeftSideBar = () => {
               <Button onClick={posterize}>Posterize</Button>
               </div>
             <Button onClick={encodeDecode}>Encode-Decode</Button>
+            <Button onClick={upscale}>Upscale</Button>
           </AccordionContent>
         </AccordionItem>
         <AccordionItem value="data">
