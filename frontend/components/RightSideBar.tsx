@@ -56,7 +56,10 @@ const generate = async (
   ip_adapter_image: string | Layer[] | null,
   use_face_id: boolean,
   bbox: number[] | null,
-  remove_background: boolean
+  remove_background: boolean,
+  use_ip_adapter_image: boolean,
+  refiner_strength: number,
+  seed: number | null
 ): Promise<string> => {
   console.log('getPreview called with prompt:', prompt)
   const body = JSON.stringify({
@@ -70,11 +73,15 @@ const generate = async (
     use_face_id,
     bbox,
     remove_background,
+    use_ip_adapter_image,
+    refiner_strength,
+    seed
   })
 
   console.log(`body: ${body}`)
 
-  const response = await fetch('http://10.0.0.22:8002/api/generate', {
+  // const response = await fetch('http://10.0.0.22:8002/api/generate', {
+  const response = await fetch('http://127.0.0.1:8001/api/generate', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -177,6 +184,9 @@ export function RightSideBar() {
   const [generateRemoveBG, setGenerateRemoveBG] = useState(false)
   const [img2imgRemoveBG, setImg2imgRemoveBG] = useState(false)
   const [inpaintRemoveBG, setInpaintRemoveBG] = useState(false)
+  const [generateRefinerStrength, setGenerateRefinerStrength] = useState(0.8)
+  const [generateSeed, setGenerateSeed] = useState(0)
+  const [generateUseSeed, setGenerateUseSeed] = useState(false)
 
   const scratchPad = useRef(null)
 
@@ -190,9 +200,9 @@ export function RightSideBar() {
     let adapterImage: string | Layer[] | null = null
     if (useIPAdapterImage) {
       adapterImage = selectedImage?.image_data as string
-      if (reuseCurrentImage) {
-        adapterImage = layerHistory[currentHistoryIndex] as Layer[]
-      }
+    }
+    if (reuseCurrentImage) {
+      adapterImage = layerHistory[currentHistoryIndex] as Layer[]
     }
 
     ;(() => console.log(`adapterImage`, adapterImage))()
@@ -208,11 +218,14 @@ export function RightSideBar() {
       adapterImage,
       useIPAdapterFaceID,
       bbox,
-      generateRemoveBG
+      generateRemoveBG,
+      useIPAdapterImage,
+      generateRefinerStrength,
+      generateUseSeed? generateSeed : null
     )
-
+    ;(() => console.log('Received image data'))()
     dispatch(toggleDisabled(false))
-
+    ;(() => console.log('Dispatching new image'))()
     dispatch(newImage({ bbox: [0, 0, 1024, 1024], imageData: b64 }))
   }
 
@@ -347,22 +360,22 @@ export function RightSideBar() {
         console.log(data)
         if ('image_data' in data) {
           if (toNewLayer) {
-            const initial_bbox = masks[0].bbox
-            const bbox = masks.reduce((acc, mask) => {
-              const [ax1, ay1, ax2, ay2] = acc
-              const [mx1, my1, mx2, my2] = mask.bbox
-              const x1 = Math.min(ax1, mx1)
-              const y1 = Math.min(ay1, my1)
-              const x2 = Math.max(ax2, mx2)
-              const y2 = Math.max(ay2, my2)
+            // const initial_bbox = masks[0].bbox
+            // let bbox = masks.reduce((acc, mask) => {
+            //   const [ax1, ay1, ax2, ay2] = acc
+            //   const [mx1, my1, mx2, my2] = mask.bbox
+            //   const x1 = Math.min(ax1, mx1)
+            //   const y1 = Math.min(ay1, my1)
+            //   const x2 = Math.max(ax2, mx2)
+            //   const y2 = Math.max(ay2, my2)
 
-              return [x1, y1, x2, y2]
-            }, initial_bbox)
+            // return [x1, y1, x2, y2]
+            // }, initial_bbox)
             const activeLayer = layerHistory[currentHistoryIndex].find(
               (layer) => layer.selected
             ) as Layer
 
-            dispatch(newLayer({ bbox, imageData: data.image_data }))
+            dispatch(newLayer({ bbox: data.bbox, imageData: data.image_data }))
           } else {
             dispatch(newImage({ bbox: [0, 0, 1024, 1024], imageData: data.image_data }))
           }
@@ -464,6 +477,39 @@ export function RightSideBar() {
                 value={generationGuidanceScale}
                 onChange={(e) => dispatch(setGenerationGuidanceScale(Number(e.target.value)))}
               />
+              <label htmlFor="generateRefinerStrength">Refiner Strength</label>
+              <input
+                id="generateRefinerStrength"
+                type="text"
+                value={generateRefinerStrength}
+                onChange={(e) => setGenerateRefinerStrength(Number(e.target.value))}
+                className="w-full bg-white text-black p-2 font-bold"
+              />
+              <input
+                type="range"
+                min={0.0}
+                max={1.0}
+                step={0.025}
+                value={generateRefinerStrength}
+                onChange={(e) => setGenerateRefinerStrength(Number(e.target.value))}
+              />
+              <label htmlFor="generateSeed">Seed</label>
+              <div className='flex'>
+              <input
+                  id="generateUseSeed"
+                  type="checkbox"
+                  checked={generateUseSeed}
+                  onChange={(e) => setGenerateUseSeed(e.target.checked)}
+                />
+              <input
+                id="generateRefinerStrength"
+                type="text"
+                value={generateSeed}
+                onChange={(e) => setGenerateSeed(Number(e.target.value))}
+                className="w-full bg-white text-black p-2 font-bold"
+                disabled={!generateUseSeed}
+              />
+              </div>
               <div className="flex items-center space-x-2">
                 <input
                   id="useIPAdapterImage"
@@ -723,13 +769,18 @@ export function RightSideBar() {
               </Button>
             </AccordionContent>
           </AccordionItem>
+          <AccordionItem value="scratch">
+            <AccordionTrigger position="left">Scratch</AccordionTrigger>
+            <AccordionContent>
+              <textarea
+                ref={scratchPad}
+                className="w-full h-16 p-2 border border-gray-300 rounded-md"
+                onChange={(e) => localStorage.setItem('scratchPad', e.target.value)}
+              />
+            </AccordionContent>
+          </AccordionItem>
         </Accordion>
         <LayerTable />
-        <textarea
-          ref={scratchPad}
-          className="w-full h-16 p-2 border border-gray-300 rounded-md"
-          onChange={(e) => localStorage.setItem('scratchPad', e.target.value)}
-        />
       </div>
     </aside>
   )
