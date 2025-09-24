@@ -94,10 +94,10 @@ class GenerateRequest(BaseModel):
     use_ip_adapter_image: bool
     refiner_strength: float
     seed: int
-    threshold1: int
-    threshold2: int
-    aperture_size: int
-    l2_gradient: bool
+    threshold1: int = 100
+    threshold2: int = 200
+    aperture_size: int = 3
+    l2_gradient: bool = False
 
 class RefineRequest(BaseModel):
     prompt: str
