@@ -187,6 +187,10 @@ export function RightSideBar() {
   const [generateRefinerStrength, setGenerateRefinerStrength] = useState(0.8)
   const [generateSeed, setGenerateSeed] = useState(0)
   const [generateUseSeed, setGenerateUseSeed] = useState(false)
+  const [generateThreshold1, setGenerateThreshold1] = useState(100)
+  const [generateThreshold2, setGenerateThreshold2] = useState(200)
+  const [generateApertureSize, setGenerateApertureSize] = useState(3)
+  const [generateL2Gradient, setGenerateL2Gradient] = useState(false)
 
   const scratchPad = useRef(null)
 
@@ -541,6 +545,65 @@ export function RightSideBar() {
                   onChange={(e) => setGenerateRemoveBG(e.target.checked)}
                 />
                 <label htmlFor="generateRemoveBG">Remove Background</label>
+              </div>
+              <div className="flex flex-col space-y-4">
+                <label htmlFor='generateThreshold1'>Canny Threshold 1</label>
+                <input 
+                  id='generateThreshold1' 
+                  type='text' 
+                  className='text-black bg-white' 
+                  value={generateThreshold1.toString()} 
+                  onChange={(e) => setGenerateThreshold1(Number(e.target.value))} 
+                />
+                <input 
+                  type='range' 
+                  value={generateThreshold1} 
+                  min={0} 
+                  max={1000} 
+                  step={1} 
+                  onChange={e => setGenerateThreshold1(Number(e.target.value))} 
+                />
+                <label htmlFor='generateThreshold2'>Canny Threshold 2</label>
+                <input 
+                  id='generateThreshold2' 
+                  type='text' 
+                  className='text-black bg-white' 
+                  value={generateThreshold2.toString()} 
+                  onChange={(e) => setGenerateThreshold2(Number(e.target.value))} 
+                />
+                <input 
+                  type='range' 
+                  value={generateThreshold2} 
+                  min={0} 
+                  max={1000} 
+                  step={1} 
+                  onChange={e => setGenerateThreshold2(Number(e.target.value))} 
+                />
+                <label htmlFor='generateApertureSize'>Aperture Size</label>
+                <input 
+                  id='generateApertureSize' 
+                  type='text' 
+                  className='text-black bg-white' 
+                  value={generateApertureSize.toString()} 
+                  onChange={(e) => setGenerateApertureSize(Number(e.target.value))} 
+                />
+                <input 
+                  type='range' 
+                  value={generateApertureSize} 
+                  min={3} 
+                  max={7} 
+                  step={2} 
+                  onChange={e => setGenerateApertureSize(Number(e.target.value))} 
+                />
+                <div className='flex w-full'>
+                  <input 
+                    id='generateL2Gradient' 
+                    type='checkbox' 
+                    checked={generateL2Gradient} 
+                    onChange={e => setGenerateL2Gradient(e.target.checked)} 
+                  />
+                  <label htmlFor='generateL2Gradient' className='text-white'>Use L2 Gradient</label>
+                </div>
               </div>
               <Button
                 onClick={() => {

@@ -94,6 +94,10 @@ class GenerateRequest(BaseModel):
     use_ip_adapter_image: bool
     refiner_strength: float
     seed: int
+    threshold1: int
+    threshold2: int
+    aperture_size: int
+    l2_gradient: bool
 
 class RefineRequest(BaseModel):
     prompt: str
@@ -579,7 +583,7 @@ def add_noise(latent, pipeline, steps):
 
     return noisy_latent
 
-async def generate(prompt, iterations, guidance_scale, negative_prompt, prompt_2, negative_prompt_2, ip_adapter_image=None, use_face_id=False, bbox=None, remove_background=False, use_ip_adapter_image=False, refiner_strength=0.2, seed=None) -> dict:
+async def generate(prompt, iterations, guidance_scale, negative_prompt, prompt_2, negative_prompt_2, ip_adapter_image=None, use_face_id=False, bbox=None, remove_background=False, use_ip_adapter_image=False, refiner_strength=0.2, seed=None, threshold1=100, threshold2=200, aperture_size=3, l2_gradient=False) -> dict:
 
     global selected_image, pipe, selected_prompt, latent, prompt_embeds, controlnet, negative_prompt_embeds, inpainter, refiner
     
@@ -746,7 +750,10 @@ async def generate(prompt, iterations, guidance_scale, negative_prompt, prompt_2
             if use_ip_adapter_image:
 
                 ip_adapter_image = np.asarray(ip_adapter_image)
-                ip_adapter_image = cv2.Canny(ip_adapter_image, 100, 200)
+                ip_adapter_image = cv2.Canny(ip_adapter_image, threshold1, threshold2)
+                if l2_gradient:
+                    ip_adapter_image = cv2.Canny(ip_adapter_image, threshold1, threshold2, L2gradient=True)
+                ip_adapter_image = cv2.Canny(ip_adapter_image, threshold1, threshold2, apertureSize=aperture_size)
                 ip_adapter_image = ip_adapter_image[:, :, None]
                 ip_adapter_image = np.concatenate([ip_adapter_image, ip_adapter_image, ip_adapter_image], axis=2)
 
