@@ -11,14 +11,16 @@ async def main():
     parser.add_argument('-i', type=str, default='photo')
     parser.add_argument('-s', type=int, default=10)
     parser.add_argument('-lr', type=float, default=1e-4)
+    parser.add_argument('-vp', type=str, default='')
     parser.add_argument('--reset', type=bool, default=False)
+    parser.add_argument('-sv', type=int, default=50)
 
     args = parser.parse_args()
 
     reset = args.reset
     print(f'reset: {reset}')
 
-    await train(collection=args.c, token=args.t, initializer_token=args.i, max_train_steps=args.s, repeats=args.s, lr=args.lr)
+    await train(collection=args.c, token=args.t, initializer_token=args.i, max_train_steps=args.s, repeats=args.s, lr=args.lr, save_steps=args.sv, validation_prompt=args.vp)
 
 
 if __name__ == "__main__":
