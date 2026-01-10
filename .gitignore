@@ -41,3 +41,9 @@ backend/models/user/*
 !backend/models/user/textual_inversions
 !backend/models/*.py
 !.gitattributes
+backend/cuda/*.safetensors
+.aider*
+.env.local
+tools/onnx_export/**/*
+tools/onnx_export/.venv-sdxl/**/*
+tools/onnx_export/.venv-sdxl/bin/**/*
