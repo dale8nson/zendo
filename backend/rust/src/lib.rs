@@ -19,6 +19,7 @@ pub mod infer;
 
 #[cfg(feature = "python")]
 pub mod python;
+pub mod main;
 
 fn resize_image_bytes(data: &[u8], max_dim: u32) -> Result<Vec<u8>> {
     let img = ImageReader::new(Cursor::new(data))

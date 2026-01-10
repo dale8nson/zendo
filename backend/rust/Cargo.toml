@@ -19,6 +19,7 @@ path = "src/bin/dev.rs"
 
 [dependencies]
 anyhow = "1.0.98"
+burn = "0.18.0"
 fast_image_resize = { version = "5.1.4", features = [
   "image",
   "rayon",
@@ -27,6 +28,7 @@ fast_image_resize = { version = "5.1.4", features = [
 image = { version = "0.25.6", features = ["jpeg", "png"] }
 numpy = "0.25.0"
 serde = { version = "1.0.219", features = ["derive"] }
+tokenizers = { version = "0.22.1-dev.0", path = "../../../tokenizers/tokenizers" }
 
 [features]
 default = ["python"]
