@@ -47,3 +47,5 @@ backend/cuda/*.safetensors
 tools/onnx_export/**/*
 tools/onnx_export/.venv-sdxl/**/*
 tools/onnx_export/.venv-sdxl/bin/**/*
+*.safetensors
+validation/

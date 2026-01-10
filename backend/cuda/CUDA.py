@@ -2,6 +2,7 @@ import torch
 from torch import Tensor
 import torch.nn.functional as F
 from torch.optim import AdamW
+from diffusers.schedulers import DDPMScheduler
 from diffusers.models.unets.unet_2d_condition import UNet2DConditionModel
 from diffusers.utils.import_utils import is_xformers_available
 from transformers import CLIPTextModel, CLIPTextModelWithProjection
@@ -72,8 +73,6 @@ class CUDATrainer:
         for p in self.enc.parameters(): p.requires_grad_(False)
         for p in self.enc2.parameters(): p.requires_grad_(False)
 
-
-
         self.samples = []
         N = image_embeds.shape[0]
         for _ in range(self.num_batches):
@@ -127,7 +126,6 @@ class CUDATrainer:
         self.emb = self.enc.get_input_embeddings()
         self.emb2 = self.enc2.get_input_embeddings()
         
-        
         self.checkpoint = checkpoint
         
         if checkpoint > 0:
@@ -174,6 +172,15 @@ class CUDATrainer:
             betas=betas, eps=eps, weight_decay=weight_decay
             )
         
+        # self.optimizer = AdamW(
+        #     [
+        #         self.emb.weight,
+        #         self.emb2.weight
+        #     ],
+        #     # lr=2e-3,
+        #     betas=betas, eps=eps, weight_decay=weight_decay
+        #     )
+        
         self.gradient_accumulation_steps = gradient_accumulation_steps
 
         num_warmup_steps_for_scheduler = lr_warmup_steps * self.accelerator.num_processes
@@ -206,18 +213,49 @@ class CUDATrainer:
         base_p2 = self.optimizer.param_groups[1]
         self.base_lr_1 = base_p1["lr"]
         self.base_lr_2 = base_p2["lr"]
+        
+        self.scheduler = DDPMScheduler.from_pretrained(model_path, subfolder='scheduler')
 
 
         self.enc, self.enc2, self.optimizer, self.lr_scheduler = self.accelerator.prepare(
             self.enc,
             self.enc2,
             self.optimizer,
-            self.lr_scheduler
+            self.lr_scheduler,
         )
 
     def train(self, global_step: int = 0, first_epoch: int = 0, epochs: int = 1, threshold=2.5, cooldown=400):
         batch_size = self.batch_size
         max_train_steps = self.max_train_steps
+        
+        def compute_snr_ddpm(timesteps: torch.LongTensor, scheduler: DDPMScheduler) -> torch.Tensor:
+            """
+            This function computes the signal-to-noise ratio (SNR) based on the given timesteps and a
+            DDPMScheduler object.
+            
+            :param timesteps: The `timesteps` parameter is a PyTorch LongTensor with shape [B], where B
+            represents the batch size. It contains the timesteps for which you want to compute the
+            signal-to-noise ratio (SNR) using the given DDPMScheduler
+            :type timesteps: torch.LongTensor
+            :param scheduler: DDPMScheduler is a class that contains information about the dynamic
+            programming mixture (DDPM) scheduler. It likely includes attributes such as alphas_cumprod,
+            which is a tensor representing the cumulative product of alphas used in the scheduler
+            :type scheduler: DDPMScheduler
+            :return: The function `compute_snr_ddpm` returns the Signal-to-Noise Ratio (SNR) calculated
+            based on the input timesteps and the DDPMScheduler object provided.
+            """
+            # timesteps: shape [B], dtype long
+            alphas_cumprod = scheduler.alphas_cumprod.to(timesteps.device)  # [num_train_timesteps]
+            a_bar_t = alphas_cumprod[timesteps]
+            snr = a_bar_t / (1.0 - a_bar_t).clamp(min=1e-12)
+            return snr
+        
+        def min_snr_weight(snr: torch.Tensor, gamma: float = 5.0) -> torch.Tensor:
+            # The code is creating a new tensor `cap` with the same shape as the tensor `snr`, and
+            # filling it with the value of `gamma`.
+            cap = torch.full_like(snr, gamma)
+            # Avoid div-by-zero if any snr≈0
+            return torch.minimum(snr, cap) / snr.clamp(min=1e-12)
         
         def mask_all_but_first(ids, am, token_id):
             # ids: [B, L], am: [B, L] (1=attend)
@@ -344,7 +382,12 @@ class CUDATrainer:
                         # print(f"t mean={t.float().mean():.1f}  mse mean={mse.mean().item():.4f}")
 
                         # ---- loss / backward (no AMP scaler) ----
-                        loss = F.mse_loss(pred.float(), tgt.float(), reduction="mean") / accum
+                        loss = F.mse_loss(pred.float(), tgt.float(), reduction="none").mean(dim=(1, 2, 3))
+                        
+                        snr = compute_snr_ddpm(t.squeeze(-1).long(), self.scheduler)
+                        weights = min_snr_weight(snr, gamma=5.0)
+                        
+                        loss = (weights * loss).mean() / accum
 
                         self.accelerator.backward(loss)
 
@@ -454,7 +497,8 @@ class CUDATrainer:
                             )
 
                             # save a checkpoint every 500 steps
-                            if (global_step % 500) == 0:
+                            
+                            if global_step % 500 == 0:
                                 with torch.no_grad():
                                     w1 = self.accelerator.unwrap_model(self.enc ).get_input_embeddings().weight
                                     w2 = self.accelerator.unwrap_model(self.enc2).get_input_embeddings().weight
@@ -471,37 +515,39 @@ class CUDATrainer:
                                     print(f"Δcos enc1:{d1:.8f} enc2:{d2:.8f}")
                                     print(f'enc lr: {p1["lr"]:.5e}  enc2 lr: {p2["lr"]:.5e}')
 
+                            # if global_step >= max_train_steps:
+                            #     stop = True
                                 # enter polish only when BOTH encoders are “in band” and aligned
-                                both_over = (d1 >= cos_band_low) and (d2 >= cos_band_low)
-                                if (not entered_band) and (both_over):
-                                    entered_band  = True
-                                    cooldown_left = cooldown_steps
+                                # both_over = (d1 >= cos_band_low) and (d2 >= cos_band_low)
+                                # if (not entered_band) and (both_over):
+                                #     entered_band  = True
+                                #     cooldown_left = cooldown_steps
 
-                                    # one-time alignment nudge at entry: push scales toward the slower side
-                                    align_gain = 0.20
-                                    gap_now = float(d1 - d2)      # >0 => enc1 ahead
-                                    delta   = max(-0.20, min(0.20, align_gain * gap_now))
-                                    self.lr_scale_1 *= (1.0 - delta)
-                                    self.lr_scale_2 *= (1.0 + delta)
+                                #     # one-time alignment nudge at entry: push scales toward the slower side
+                                #     align_gain = 0.20
+                                #     gap_now = float(d1 - d2)      # >0 => enc1 ahead
+                                #     delta   = max(-0.20, min(0.20, align_gain * gap_now))
+                                #     self.lr_scale_1 *= (1.0 - delta)
+                                #     self.lr_scale_2 *= (1.0 + delta)
 
-                                    # halve both for polish "cooldown"
-                                    self.lr_scale_1 *= cooldown_factor
-                                    self.lr_scale_2 *= cooldown_factor
+                                #     # halve both for polish "cooldown"
+                                #     self.lr_scale_1 *= cooldown_factor
+                                #     self.lr_scale_2 *= cooldown_factor
 
-                                    print(f"Entered polish at step {global_step}. "
-                                        f"scales: {self.lr_scale_1:.2f}/{self.lr_scale_2:.2f} "
-                                        f"(d1={d1:.5f}, d2={d2:.5f})")
+                                #     print(f"Entered polish at step {global_step}. "
+                                #         f"scales: {self.lr_scale_1:.2f}/{self.lr_scale_2:.2f} "
+                                #         f"(d1={d1:.5f}, d2={d2:.5f})")
 
-                                # polish stop conditions
-                                if entered_band:
-                                    cooldown_left -= 1
-                                    stop_now = (
-                                        (d1 > hard_cap or d2 > hard_cap) or
-                                        (cooldown_left <= 0)
-                                    )
-                                    if stop_now:
-                                        print(f"Stopping at step {global_step}: Δcos enc1:{d1:.3f} enc2:{d2:.3f}")
-                                        stop = True
+                                # # polish stop conditions
+                                # if entered_band:
+                                #     cooldown_left -= 1
+                                #     stop_now = (
+                                #         (d1 > hard_cap or d2 > hard_cap) or
+                                #         (cooldown_left <= 0)
+                                #     )
+                                #     if stop_now:
+                                #         print(f"Stopping at step {global_step}: Δcos enc1:{d1:.3f} enc2:{d2:.3f}")
+                                #         stop = True
 
                     with torch.no_grad():
                         self.accelerator.unwrap_model(self.enc ).get_input_embeddings().weight[self.index_no_updates]   = \

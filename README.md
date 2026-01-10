@@ -117,6 +117,26 @@ npm run dev
 ```
 App: [http://localhost:3000](http://localhost:3000)
 
+### New Rust Backend + Frontend (Dev)
+
+Use the Rust Axum backend with ONNX Runtime and the same Next.js frontend:
+
+```
+# Start both processes (backend on :8080, frontend on :3000)
+./scripts/dev.sh
+
+# Or individually
+./scripts/start-backend.sh
+./scripts/start-frontend.sh
+```
+
+Env vars for the Rust backend:
+- `ZENDO_BIND_ADDR` (default `0.0.0.0:8080`)
+- `ZENDO_UPSCALER_ONNX` (path to Real-ESRGAN x4 ONNX; if omitted, auto-detects `backend/models/Real-ESRGAN/RealESRGAN_x4plus.onnx`)
+- `ZENDO_SDXL_DIR` (path to SDXL ONNX export dir; enables SDXL WebSocket inference)
+- `ZENDO_STEPS` (default 30)
+- `ZENDO_CONCURRENCY` (defaults to logical CPUs)
+
 ---
 
 ## 🚢 Deployment (Fly.io)
