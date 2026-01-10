@@ -9,11 +9,12 @@ from torchvision import transforms
 from torchvision import tv_tensors
 from torchvision.transforms import InterpolationMode
 from safetensors.torch import save_file, load_file
-from transformers import CLIPTokenizer, CLIPTextModelWithProjection, CLIPTextModel, get_scheduler
+from transformers import CLIPTokenizer, CLIPTextModelWithProjection, CLIPTextModel
+from transformers.optimization import get_scheduler
 from diffusers import StableDiffusionXLPipeline, StableDiffusionXLImg2ImgPipeline, DiffusionPipeline
 from diffusers.utils.import_utils import is_xformers_available
 from pydantic.main import BaseModel
-from typing import List, Tuple, Dict, Any, cast
+from typing import List, Tuple, Dict, Any, Optional, cast
 from PIL import Image, ImageEnhance, ImageOps, ImageFilter
 import base64
 from io import BytesIO
@@ -33,6 +34,8 @@ import gc
 from datetime import datetime, timezone
 import asyncio
 from numbers import Number
+from traceback import print_tb
+from torch.nn.modules.sparse import Embedding
 
 
 from diffusers import (
@@ -74,6 +77,8 @@ class DatasetPostRequest(BaseModel):
 pipe = None
 refiner = None
 inpainter = None
+
+device = torch.device('mps') if torch.backends.mps.is_available() else torch.device('cpu')
 
 def extract_base64_data(data_url: str) -> str:
     # Remove header if present
@@ -594,7 +599,7 @@ class SyncCanvasSize:
 
 class RandomImageDataset(Dataset):
 
-    def __init__(self, placeholder_token: str, initializer_token: str, collection: str, repeats: int, tokenizer_1, tokenizer_2, size=1024):
+    def __init__(self, placeholder_token: str, initializer_token: str, collection: str, repeats: int, tokenizer_1, tokenizer_2, step=0, size=1024):
 
         self._mirror = False
 
@@ -617,33 +622,51 @@ class RandomImageDataset(Dataset):
         with open(os.path.join(self._data_path, '../../captions.json')) as f:
             self._captions = json.loads(f.read())
 
+        self._filenames = [f for f in filter(lambda n: n in self._captions, self._filenames)]
+
+
+        # self.shuffle()
+
+    def shuffle(self):
+        random.seed()
+        image_files = self._filenames.copy()
+        self._filelist = []
+
+        while len(image_files) > 0:
+            self._filelist = image_files.pop(random.randint(0, len(image_files) - 1))
+
+
     def __len__(self):
-        return self._repeats
+        return len(self._filenames)
 
     def __getitem__(self, i: int):
-        transform_functions = [self.blur, self.mirror, self.jitter, self.resize]
-        transform_functions = [t for t in [transform_functions[i:j] for i in range(len(transform_functions) - 1) for j in range(i + 1, len(transform_functions) + 1)]]
+        # transform_functions = [self.blur, self.mirror, self.jitter, self.resize]
+        # transform_functions = [t for t in [transform_functions[i:j] for i in range(len(transform_functions) - 1) for j in range(i + 1, len(transform_functions) + 1)]]
         example = {}
 
-        filename = random.choice(self._filenames)
+        filename = self._filenames[i]
 
-        prompt = None
+        # filename = random.choice(self._filenames)
 
-        while prompt is None:
-            try:
-                prompt = self._captions[filename]['caption']
+        # prompt = None
 
-            except:
-                prompt = None
-                filename = random.choice(self._filenames)
-                continue
+        # while prompt is None:
+            # try:
+        prompt = self._captions['1ce365a9-ec7a-4941-bd32-215eed1dedf2.png']['caption']
+
+            # except:
+            #     prompt = None
+            #     filename = random.choice(self._filenames)
+            #     continue
 
         print(f"training prompt: {prompt}")
         example['prompt'] = prompt
 
-        image = Image.open(os.path.join(self._data_path, filename)).convert("RGB")
+        image = Image.open(os.path.join(self._data_path, '1ce365a9-ec7a-4941-bd32-215eed1dedf2.png')).convert("RGB")
+        example["original_size"] = (image.height, image.width)
+        example['crop_top_left'] = (0, 0)
 
-        bbox = self._captions[filename]['bbox']
+        bbox = self._captions['1ce365a9-ec7a-4941-bd32-215eed1dedf2.png']['bbox']
         x1, y1, x2, y2 = bbox
 
         # choices = random.choice(transform_functions)
@@ -653,11 +676,16 @@ class RandomImageDataset(Dataset):
         #     image = t(image)
 
         # image, bbox = self.compose(image, bbox)
-        image = self.crop(image, bbox)
+        image = self.crop(image, bbox).convert('RGB')
+        arr = np.asarray(image).astype(np.uint8)
+        print(f'arr: {arr}')
+        arr = (arr / 127.5 - 1.0).astype(np.float32)
+        pixel_values = torch.from_numpy(arr).permute(2, 0, 1).unsqueeze(0).to(device)
+        print(f'pixel_values.shape: {pixel_values.shape}')
+        example['base_tokens'] = self._base_tokens
 
         example['token'] = self._placeholder_token
-        example["original_size"] = (image.height, image.width)
-        example["crop_top_left"] = (0, 0)
+
         example["input_ids_1"] = self._tokenizer_1(
             prompt,
             padding="max_length",
@@ -674,11 +702,15 @@ class RandomImageDataset(Dataset):
             return_tensors="pt",
         ).input_ids[0]
 
+        save_path = os.path.join(os.getcwd(), f"app/training_images/")
+        os.makedirs(save_path, exist_ok=True)
+
         image.save(os.path.join(os.getcwd(), f"app/training_images/{self._collection}-{datetime.now(timezone.utc)}.png"))
 
         image = np.asarray(image).astype(np.uint8)
         image = (image / 127.5 - 1.0).astype(np.float32)
-        example["pixel_values"] = torch.from_numpy(image).permute(2, 0, 1)
+        example["pixel_values"] = pixel_values
+        # example["pixel_values"] = torch.from_numpy(image).permute(2, 0, 1)
         print(f"example[\"pixel_values\"].size(): {example['pixel_values'].size()}")
 
         self._mirror = False
@@ -789,34 +821,42 @@ class RandomImageDataset(Dataset):
         bbox = [int(n * scale) for n in bbox]
 
         x1, y1, x2, y2 = bbox
-        x1 = x1 if x1 >= 0 else 0
-        y1 = y1 if y1 >= 0 else 0
-        x2 = x2 if x2 <= self._size else self._size
-        y2 = y2 if y2 <= self._size else self._size
+        # x1 = max(x1, 0)
+        # y1 = max(y1, 0)
+        # x2 = min(x2, self._size)
+        # y2 = min(y2, self._size)
         w, h = x2 - x1, y2 - y1
 
-        min_x = int(x1 - w * 0.25)
-        min_x = min(min_x, image.width - self._size)
-        min_x = min_x if min_x >= 0 else 0
-
-        max_x = int(x1 + w * 0.25)
-        max_x = max_x if max_x < image.width - self._size and max_x >= min_x else image.width - self._size
-
-        print(f"min_x: {min_x} max_x: {max_x}")
-
-        min_y = int(y1 - h * 0.25)
-        min_y = min(min_y, image.height - self._size)
-        min_y = min_y if min_y >= 0 else 0
-
-        max_y = int(y1 + h * 0.25)
-        max_y = max_y if max_y < image.height - self._size and max_y >= min_y else image.height - self._size
-
-        print(f"min_y: {min_y} max_y: {max_y}")
-
-        x1 = random.randint(min_x, max_x)
-        y1 = random.randint(min_y, max_y)
+        x1 = x1 if x1 <= (image.width - self._size) else (image.width - self._size)
+        # x1 = max(x1 + w // 2 - self._size // 2, image.width - self._size, 0)
+        y1 = y1 if y1 <= (image.height - self._size) else (image.height - self._size)
+        # y1 = max(y1 + h // 2 - self._size // 2, image.height - self._size, 0)
         x2 = x1 + self._size
         y2 = y1 + self._size
+
+
+        # min_x = int(x1 - w * 0.25)
+        # min_x = min(min_x, image.width - self._size)
+        # min_x = min_x if min_x >= 0 else 0
+
+        # max_x = int(x1 + w * 0.25)
+        # max_x = max_x if max_x < image.width - self._size and max_x >= min_x else image.width - self._size
+
+        # print(f"min_x: {min_x} max_x: {max_x}")
+
+        # min_y = int(y1 - h * 0.25)
+        # min_y = min(min_y, image.height - self._size)
+        # min_y = min_y if min_y >= 0 else 0
+
+        # max_y = int(y1 + h * 0.25)
+        # max_y = max_y if max_y < image.height - self._size and max_y >= min_y else image.height - self._size
+
+        # print(f"min_y: {min_y} max_y: {max_y}")
+
+        # x1 = random.randint(min_x, max_x)
+        # y1 = random.randint(min_y, max_y)
+        # x2 = x1 + self._size
+        # y2 = y1 + self._size
         bbox = (x1, y1, x2, y2)
         print(f"bbox: {bbox}")
         w, h = x2 - x1, y2 - y1
@@ -830,7 +870,7 @@ class RandomImageDataset(Dataset):
         return self._jitter(image)
 
 
-def save_progress(tokenizer, tokenizer_2, text_encoder, text_encoder_2, token: str, weight_name: str, output_dir: str, step: int, optimizer: Optimizer, lr_scheduler: LRScheduler):
+def save_progress(tokenizer, tokenizer_2, text_encoder, text_encoder_2, token: str, weight_name: str, output_dir: str, step: int, optimizer: Optimizer, lr_scheduler: LRScheduler, initializer_token: str):
     os.makedirs(output_dir, exist_ok=True)
     print("saving checkpoint...")
 
@@ -843,6 +883,7 @@ def save_progress(tokenizer, tokenizer_2, text_encoder, text_encoder_2, token: s
         "emb1": text_encoder.get_input_embeddings().weight[tok_id1],
         "emb2": text_encoder_2.get_input_embeddings().weight[tok_id2],
         "optimizer": optimizer.state_dict(),
+        "initializer_token": initializer_token,
         "lr_scheduler": lr_scheduler.state_dict() if lr_scheduler else None,
     }, os.path.join(output_dir, f"{weight_name}-{token}-step-{step}.pt"))
 
@@ -872,6 +913,11 @@ def save_progress(tokenizer, tokenizer_2, text_encoder, text_encoder_2, token: s
 
 async def validate(collection: str, token: str, inference_steps: int, guidance_scale: float, validation_prompt: str, step: int):
 
+    if torch.backends.mps.is_available():
+        torch.mps.empty_cache()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
     pipe = await get_pipe()
     if pipe is None:
         await init_SDXL()
@@ -886,9 +932,29 @@ async def validate(collection: str, token: str, inference_steps: int, guidance_s
 
     model_path = os.path.join(os.getcwd(), f"../models/user/{collection}")
 
-    for file in [f'{collection}.safetensors', f'{collection}_2.safetensors']:
-        path = os.path.join(model_path, file)
-        pipe.load_textual_inversion(path)
+    path = os.path.join(model_path, f'{collection}.safetensors')
+    file = load_file(path)
+    for tk in file.keys():
+        emb = file[tk]
+        pipe.tokenizer.add_tokens(tk)
+        id = pipe.tokenizer.convert_tokens_to_ids(tk)
+        # text_encoder_1.resize_token_embeddings(len(tokenizer_1))
+        # text_encoder_2.resize_token_embeddings(len(tokenizer_2))
+        pipe.text_encoder.resize_token_embeddings(len(pipe.tokenizer))
+        embeddings = pipe.text_encoder.get_input_embeddings().weight.data
+        embeddings[id] = emb
+
+    path = os.path.join(model_path, f'{collection}_2.safetensors')
+    file = load_file(path)
+    for tk in file.keys():
+        emb = file[tk]
+        pipe.tokenizer_2.add_tokens(tk)
+        id = pipe.tokenizer_2.convert_tokens_to_ids(tk)
+        pipe.text_encoder_2.resize_token_embeddings(len(pipe.tokenizer_2))
+        embeddings = pipe.text_encoder_2.get_input_embeddings().weight.data
+        embeddings[id] = emb
+
+    # pipe.load_textual_inversion(path)
 
     print(f'Validating step {step}...')
     image = pipe(prompt=validation_prompt, num_inference_steps=inference_steps, guidance_scale=guidance_scale, width=1024, height=1024, denoising_end=0.8, output_type='latent').images[0]
@@ -909,7 +975,15 @@ async def validate(collection: str, token: str, inference_steps: int, guidance_s
     refiner.to('cpu')
     refiner = None
 
+    if torch.backends.mps.is_available():
+        torch.mps.empty_cache()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
     print('Validation complete.')
+
+
+
 
 
 async def train(
@@ -917,11 +991,11 @@ async def train(
     token: str,
     initializer_token: str = "photo",
     resolution=1024,
-    max_train_steps=100,
+    max_train_steps=3000,
     num_training_steps=100,
     repeats=100,
     train_batch_size=1,
-    gradient_accumulation_steps=1,
+    gradient_accumulation_steps=4,
     lr=1e-4,
     lr_num_cycles=1,
     betas=(0.9, 0.999),
@@ -934,7 +1008,8 @@ async def train(
     num_workers=0,
     reset_optimizer=False,
     reset_lr_scheduler=False,
-    validation_prompt:str | None=None
+    validation_prompt:str='',
+    save_steps:int=50
 ):
 
     device = torch.device("mps" if torch.backends.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu")
@@ -1021,10 +1096,14 @@ async def train(
     tokenizer_1.add_tokens(placeholder_tokens)
     tokenizer_2.add_tokens(placeholder_tokens)
 
+    print(f'initializer_token: {initializer_token}')
     base_tokens = initializer_token.split(' ')
+    base_tokens_1 = [tokenizer_1.tokenize(t)[0] for t in base_tokens]
+    base_tokens_2 = [tokenizer_2.tokenize(t)[0] for t in base_tokens]
 
-    token_ids = tokenizer_1.encode(base_tokens, add_special_tokens=False)
-    token_ids_2 = tokenizer_2.encode(base_tokens, add_special_tokens=False)
+    print(f'base_tokens: {base_tokens_1}')
+    token_ids = tokenizer_1.encode(base_tokens_1, add_special_tokens=False)
+    token_ids_2 = tokenizer_2.encode(base_tokens_2, add_special_tokens=False)
 
     initializer_token_ids = token_ids
     print(f'initializer_token_ids: {initializer_token_ids}')
@@ -1039,22 +1118,23 @@ async def train(
     token_embeds: torch.Tensor = cast(torch.Tensor, text_encoder_1.get_input_embeddings().weight.data)
     token_embeds_2: torch.Tensor = cast(torch.Tensor, text_encoder_2.get_input_embeddings().weight.data)
 
-    with torch.no_grad():
+    text_encoder_1.to(device)
+    text_encoder_2.to(device)
+    unet.to(device)
+    vae.to(device)
 
-        initial_embed_1 = torch.zeros(768)
-        initial_embed_2 = torch.zeros(1280)
+    with torch.no_grad():
+        initial_embed_1 = torch.zeros(768, device=token_embeds.device, dtype=token_embeds.dtype)
+        initial_embed_2 = torch.zeros(1280, device=token_embeds_2.device, dtype=token_embeds_2.dtype)
 
         for id in initializer_token_ids:
-            emb = token_embeds[id]
-            torch.add(initial_embed_1, emb, alpha= 1 / len(initializer_token_ids))
+            initial_embed_1.add_(token_embeds[id], alpha=1.0/len(initializer_token_ids))
 
         for id in initializer_token_ids_2:
-            emb = token_embeds_2[id]
-            torch.add(initial_embed_2, emb, alpha= 1 / len(initializer_token_ids_2))
+            initial_embed_2.add_(token_embeds_2[id], alpha=1.0/len(initializer_token_ids_2))
 
         for token_id in placeholder_token_ids:
-             token_embeds[token_id] = initial_embed_1
-
+            token_embeds[token_id] = initial_embed_1
         for token_id in placeholder_token_ids_2:
             token_embeds_2[token_id] = initial_embed_2
 
@@ -1069,6 +1149,21 @@ async def train(
     text_encoder_1.gradient_checkpointing_enable()
     text_encoder_2.gradient_checkpointing_enable()
 
+    for p in text_encoder_1.parameters(): p.requires_grad_(False)
+    for p in text_encoder_2.parameters(): p.requires_grad_(False)
+    emb1 = text_encoder_1.get_input_embeddings()   # nn.Embedding
+    emb2 = text_encoder_2.get_input_embeddings()
+    emb1.weight.requires_grad_(True)
+    emb2.weight.requires_grad_(True)
+
+    mask1 = torch.zeros_like(emb1.weight, dtype=torch.bool)
+    mask1[torch.as_tensor(placeholder_token_ids, device=emb1.weight.device)] = True
+    mask2 = torch.zeros_like(emb2.weight, dtype=torch.bool)
+    mask2[torch.as_tensor(placeholder_token_ids_2, device=emb2.weight.device)] = True
+
+    emb1.weight.register_hook(lambda g: g.where(mask1, torch.zeros_like(g)))
+    emb2.weight.register_hook(lambda g: g.where(mask2, torch.zeros_like(g)))
+
     if is_xformers_available():
         import xformers
 
@@ -1079,11 +1174,8 @@ async def train(
             )
         unet.enable_xformers_memory_efficient_attention()
 
-    optimizer_class = torch.optim.AdamW
 
-    optimizer = optimizer_class(
-        list(text_encoder_1.parameters()) + list(text_encoder_2.parameters()), lr=lr
-    )
+    optimizer = torch.optim.AdamW([emb1.weight, emb2.weight], lr=lr, betas=betas, eps=eps, weight_decay=0.0)
 
     placeholder_token = " ".join(tokenizer_1.convert_ids_to_tokens(placeholder_token_ids))
     print(f"tokenizer_1.get_added_vocab(): {tokenizer_1.get_added_vocab()}")
@@ -1151,9 +1243,36 @@ async def train(
 
             # path = os.path.join(os.getcwd(), f'../models/user/{collection}/captions.json')
 
-            # emb1 = checkpoint['emb1'].to(device)
-            # emb2 = checkpoint['emb2'].to(device)
-            # init_tks = checkpoint['intializer_token'].split(' ')
+            emb1 = checkpoint['emb1']
+            emb1 = emb1.to(device)
+            emb2 = checkpoint['emb2']
+            emb2 = emb2.to(device)
+            init_tks = checkpoint['initializer_token'].split(' ')
+
+            new_tokens = [tk for tk in filter(lambda t: t not in init_tks, base_tokens)]
+
+            if len(new_tokens) > 0:
+                new_embeds_1 = torch.zeros_like(emb1)
+                new_embeds_1 = new_embeds_1.to(device)
+                new_embeds_2 = torch.zeros_like(emb2)
+                new_embeds_2 = new_embeds_2.to(device)
+                token_embeds = token_embeds.to(device)
+                token_embeds_2 = token_embeds_2.to(device)
+
+                for tk in new_tokens:
+                    tk1 = tokenizer_1.tokenize(tk)[0]
+                    id = tokenizer_1.convert_tokens_to_ids(tk1)
+                    token_embeds[id].to(device)
+                    print(f'token_embeds.device: {token_embeds.device} token_embeds[id].device: {token_embeds[id].device} new_embeds_1.device: {new_embeds_1.device}')
+                    new_embeds_1 += token_embeds[id] * (0.4 / len(new_tokens))
+
+                    tk2 = tokenizer_2.tokenize(tk)[0]
+                    id = tokenizer_2.convert_tokens_to_ids(tk2)
+                    token_embeds_2[id].to(device)
+                    new_embeds_2 += token_embeds_2[id] * (0.4 / len(new_tokens))
+
+                emb1 = (0.6 * emb1) + new_embeds_1
+                emb2 = (0.6 * emb2) + new_embeds_2
 
             # composite_emb_1 = torch.zeros(emb1.shape)
             # composite_emb_2 = torch.zeros(emb2.shape)
@@ -1161,12 +1280,19 @@ async def train(
 
             checkpoint['emb1'].to(device, dtype=torch.float32)
             checkpoint['emb2'].to(device, dtype=torch.float32)
-            token_embeds[token_ids] = checkpoint['emb1']
-            token_embeds_2[token_ids_2] = checkpoint['emb2']
+            token_embeds = token_embeds.to(device)
+            token_ids = torch.tensor(token_ids)
+            token_ids = token_ids.to(device)
+            token_embeds[token_ids] = emb1
+            token_embeds_2 = token_embeds_2.to(device)
+            token_ids_2 = torch.tensor(token_ids_2)
+            token_ids_2 = token_ids_2.to(device)
+            token_embeds_2[token_ids_2] = emb2
+
 
             global_step = checkpoint.get("step", 0)
             initial_global_step = global_step
-            max_train_steps = max_train_steps + global_step
+            max_train_steps += global_step
 
             optimizer = torch.optim.AdamW(list(text_encoder_1.parameters()) + list(text_encoder_2.parameters()), lr=lr)
 
@@ -1242,7 +1368,8 @@ async def train(
 
     to_pil = T.ToPILImage()
 
-    save_steps = min(max_train_steps // 2, 50)
+    accum = 4
+    save_steps += save_steps % accum
     print(f"text_encoder_1.get_added_vocab(): {tokenizer_1.get_added_vocab()}")
 
     for epoch in range(first_epoch, num_train_epochs):
@@ -1259,7 +1386,10 @@ async def train(
         if torch.backends.mps.is_available():
             torch.mps.empty_cache()
 
+        batch_steps = 0
         try:
+
+            cumulative_loss = 0
             for step, batch in enumerate(train_dataloader):
                 gc.collect()
                 if torch.cuda.is_available():
@@ -1267,20 +1397,20 @@ async def train(
                 if torch.backends.mps.is_available():
                     torch.mps.empty_cache()
 
-
                 images = batch["pixel_values"]
                 images = images.squeeze(0)
                 print(f"images.size(): {images.size()}")
                 # images = torch.Tensor.numpy(images)
                 print(f"images.shape: {images.shape}")
-                images = to_pil(images)
-                images = preprocess(images)
+                # images = to_pil(images)
+                # images = preprocess(images)
 
                 if torch.cuda.is_available():
                     with accelerator.accumulate([text_encoder_1, text_encoder_2]):
                         # Convert images to latent space
                         images = images.unsqueeze(0)
-                        latents = vae.encode(images.to(dtype=torch.float16)).latent_dist.sample()
+                        images = images.to(device, dtype=torch.float32)
+                        latents = vae.encode(images.to(dtype=torch.float32)).latent_dist.sample()
 
                         print(f"Line: {inspect.currentframe().f_lineno} Allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MiB")
                         print(f"Line: {inspect.currentframe().f_lineno} Reserved: {torch.cuda.memory_reserved() / 1024**2:.2f} MiB")
@@ -1297,6 +1427,10 @@ async def train(
                         # Add noise to the latents according to the noise magnitude at each timestep
                         # (this is the forward diffusion process)
                         noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
+
+                        # if your dataset packs them as shape [2, B]
+                        original_size = [(batch["original_size"][0][i].item(), batch["original_size"][1][i].item()) for i in range(bsz)]
+                        crop_top_left = [(batch["crop_top_left"][0][i].item(), batch["crop_top_left"][1][i].item()) for i in range(bsz)]
 
                         # Get the text embedding for conditioning
                         encoder_hidden_states_1 = (
@@ -1390,7 +1524,8 @@ async def train(
                     accelerator.wait_for_everyone()
                     accelerator.end_training()
                 else:
-                    latents = vae.encode(batch["pixel_values"]).latent_dist.sample().detach()
+                    images = images.to(device, dtype=torch.float32)
+                    latents = vae.encode(images.to(dtype=torch.float32)).latent_dist.sample()
                     latents = latents * vae.config.scaling_factor
 
                     # Sample noise that we'll add to the latents
@@ -1406,13 +1541,13 @@ async def train(
 
                     # Get the text embedding for conditioning
                     encoder_hidden_states_1 = (
-                        text_encoder_1(batch["input_ids_1"], output_hidden_states=True)
+                        text_encoder_1(batch["input_ids_1"].to(device), output_hidden_states=True)
                         .hidden_states[-2]
                     )
 
-                    encoder_output_2 = text_encoder_2(batch["input_ids_2"], output_hidden_states=True)
+                    encoder_output_2 = text_encoder_2(batch["input_ids_2"].to(device), output_hidden_states=True)
 
-                    encoder_hidden_states_2 = encoder_output_2.hidden_states[-2]
+                    encoder_hidden_states_2 = encoder_output_2.hidden_states[-2].to(device)
 
                     print(f"batch[\"original_size\"][0]: {batch["original_size"][0]}")
                     print(f"batch[\"original_size\"][1]: {batch["original_size"][1]}")
@@ -1431,7 +1566,7 @@ async def train(
                     print(f"target_size[0]: {target_size[0]} target_size[1]: {target_size[1]}")
                     add_time_ids = torch.cat(
                         [
-                            torch.tensor(original_size[i] + crop_top_left[i] + target_size)
+                            torch.tensor(original_size[i] + crop_top_left[i] + target_size).to(device)
                             for i in range(train_batch_size)
                         ]
                     )
@@ -1443,7 +1578,7 @@ async def train(
                     print(f"timesteps: {timesteps}")
                     # Predict the noise residual
                     # print(f"unet.weight.shape: {unet.weight.shape}")
-                    model_pred = unet(noisy_latents, timesteps, encoder_hidden_states, added_cond_kwargs=added_cond_kwargs
+                    model_pred = unet(noisy_latents.to(device), timesteps.to(device), encoder_hidden_states.to(device), added_cond_kwargs=added_cond_kwargs
                     ).sample
 
                     # Get the target for loss depending on the prediction type
@@ -1456,68 +1591,87 @@ async def train(
 
                     loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
 
+                    cumulative_loss += loss
+
                     print(f"loss: {loss}")
 
+                    loss = loss / accum
                     loss.backward()
 
-                    optimizer.step()
-                    lr_scheduler.step()
-                    optimizer.zero_grad()
+                    global_step += 1
 
-                    index_no_updates = torch.ones((len(tokenizer_1),), dtype=torch.bool)
-                    index_no_updates[min(placeholder_token_ids) : max(placeholder_token_ids) + 1] = False
-                    index_no_updates_2 = torch.ones((len(tokenizer_2),), dtype=torch.bool)
-                    index_no_updates_2[min(placeholder_token_ids_2) : max(placeholder_token_ids_2) + 1] = False
+                    if (global_step) % accum == 0:
+                        torch.nn.utils.clip_grad_norm_([emb1.weight, emb2.weight], max_norm=1.0)
+                        optimizer.step()
+                        lr_scheduler.step()
+                        optimizer.zero_grad(set_to_none=True)
+                        print(f'cumulative loss for steps {global_step - accum} to {global_step}: {cumulative_loss}')
+                        cumulative_loss = 0
 
-                    with torch.no_grad():
+                        if global_step % save_steps == 0 and global_step % accum == 0:
+                            if global_step >= save_steps:
+                                save_progress(tokenizer=tokenizer_1, tokenizer_2=tokenizer_2, text_encoder=text_encoder_1, text_encoder_2=text_encoder_2, token=token, weight_name=collection, output_dir=output_dir, step=global_step, optimizer=optimizer, lr_scheduler=lr_scheduler, initializer_token=initializer_token)
 
-                        text_encoder_1.get_input_embeddings().weight[index_no_updates] = (
-                            orig_embeds_params[index_no_updates]
-                        )
-                        text_encoder_2.get_input_embeddings().weight[index_no_updates_2] = (
-                            orig_embeds_params_2[index_no_updates_2]
-                        )
+                            logs = {"loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0]}
+                            progress_bar.set_postfix(**logs)
+
+                            if validation_prompt == '':
+                                data = train_dataset[random.randint(0, len(train_dataset))]
+                                token = data['token']
+                                validation_prompt = data['prompt']
+
+                            validation_prompt = cast(str, validation_prompt)
+
+                            if torch.backends.mps.is_available():
+                                torch.mps.empty_cache()
+                            if torch.cuda.is_available():
+                                torch.cuda.empty_cache()
+
+                            try:
+                                await validate(collection=collection, token=token, inference_steps=15, guidance_scale=7.5, step=global_step, validation_prompt=validation_prompt)
+
+                            except Exception as e:
+                                print(e)
+
+                            print(f"Global step: {global_step}, loss: {loss.detach().item():.4f}")
+
+                            if global_step >= max_train_steps:
+                                break
 
                 images = []
                 progress_bar.update(1)
                 global_step += 1
-                if global_step % save_steps == 0:
 
-                    save_progress(tokenizer=tokenizer_1, tokenizer_2=tokenizer_2, text_encoder=text_encoder_1, text_encoder_2=text_encoder_2, token=token, weight_name=collection, output_dir=output_dir, step=global_step, optimizer=optimizer, lr_scheduler=lr_scheduler)
+                # latest_step = {
+                #     "step": global_step,
+                #     "token": token,
+                #     "emb1": text_encoder_1.get_input_embeddings().weight[token_ids],
+                #     "emb2": text_encoder_2.get_input_embeddings().weight[token_ids_2],
+                #     "optimizer": optimizer.state_dict(),
+                #     "initializer_token": initializer_token,
+                #     "lr_scheduler": lr_scheduler.state_dict() if lr_scheduler else None,
+                # }
 
-                    logs = {"loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0]}
-                    progress_bar.set_postfix(**logs)
+                print(f'global_step: {global_step}')
 
-                    if validation_prompt is None:
-                        data = train_dataset[random.randint(0, len(train_dataset))]
-                        token = data['token']
-                        validation_prompt = data['prompt']
 
-                    validation_prompt = cast(str, validation_prompt)
 
-                    if torch.backends.mps.is_available():
-                        torch.mps.empty_cache()
-                    if torch.cuda.is_available():
-                        torch.cuda.empty_cache()
+        except KeyboardInterrupt as e:
+            if global_step % save_steps == 0 and global_step % accum == 0:
+                save_progress(tokenizer=tokenizer_1, tokenizer_2=tokenizer_2, text_encoder=text_encoder_1, text_encoder_2=text_encoder_2, token=token, weight_name=collection, output_dir=output_dir, step=global_step, optimizer=optimizer, lr_scheduler=lr_scheduler, initializer_token=initializer_token)
 
-                    try:
-                        task = asyncio.create_task(validate(collection=collection, token=token, inference_steps=15, guidance_scale=7.5, step=global_step, validation_prompt=validation_prompt))
-                        tasks.add(task)
-                        task.add_done_callback(tasks.discard)
+            print(e)
 
-                    except Exception as e:
-                        print(e)
+            for task in tasks:
+                task.cancel()
 
-                    print(f"Global step: {global_step}, loss: {loss.detach().item():.4f}")
-
-                    if global_step >= max_train_steps:
-                        break
+            raise e
 
         except Exception as e:
+            if global_step % save_steps == 0 and global_step % accum == 0:
+                save_progress(tokenizer=tokenizer_1, tokenizer_2=tokenizer_2, text_encoder=text_encoder_1, text_encoder_2=text_encoder_2, token=token, weight_name=collection, output_dir=output_dir, step=global_step, optimizer=optimizer, lr_scheduler=lr_scheduler, initializer_token=initializer_token)
 
-            save_progress(tokenizer=tokenizer_1, tokenizer_2=tokenizer_2, text_encoder=text_encoder_1, text_encoder_2=text_encoder_2, token=token, weight_name=collection, output_dir=output_dir, step=global_step, optimizer=optimizer, lr_scheduler=lr_scheduler)
-
-            if validation_prompt is None:
+            if validation_prompt =='':
                 data = train_dataset[random.randint(0, len(train_dataset))]
                 token = data['token']
                 validation_prompt = data['prompt']
@@ -1529,19 +1683,18 @@ async def train(
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
 
-            try:
-                task = asyncio.create_task(validate(collection=collection, token=token, inference_steps=15, guidance_scale=7.5, step=global_step, validation_prompt=validation_prompt))
-                tasks.add(task)
-                task.add_done_callback(tasks.discard)
+            # try:
+            #     await validate(collection=collection, token=token, inference_steps=15, guidance_scale=7.5, step=global_step, validation_prompt=validation_prompt)
 
-            except Exception as e:
-                print(e)
+            # except Exception as e:
+            print(e, print_tb(e.__traceback__))
 
             raise e
 
-        save_progress(tokenizer=tokenizer_1, tokenizer_2=tokenizer_2, text_encoder=text_encoder_1, text_encoder_2=text_encoder_2, token=token, weight_name=collection, output_dir=output_dir, step=global_step, optimizer=optimizer, lr_scheduler=lr_scheduler)
+        if global_step % save_steps == 0 and global_step % accum == 0:
+            save_progress(tokenizer=tokenizer_1, tokenizer_2=tokenizer_2, text_encoder=text_encoder_1, text_encoder_2=text_encoder_2, token=token, weight_name=collection, output_dir=output_dir, step=global_step, optimizer=optimizer, lr_scheduler=lr_scheduler, initializer_token=initializer_token)
 
-        if validation_prompt is None:
+        if validation_prompt == '':
             data = train_dataset[random.randint(0, len(train_dataset))]
             token = data['token']
             validation_prompt = data['prompt']
@@ -1554,17 +1707,172 @@ async def train(
             torch.cuda.empty_cache()
 
         try:
-            task = asyncio.create_task(validate(collection=collection, token=token, inference_steps=15, guidance_scale=7.5, step=global_step, validation_prompt=validation_prompt))
-            tasks.add(task)
-            task.add_done_callback(tasks.discard)
+            await validate(collection=collection, token=token, inference_steps=15, guidance_scale=7.5, step=global_step, validation_prompt=validation_prompt)
+
 
         except Exception as e:
             print(e)
 
+    return {"status":"OK"}
 
 
 
-        # for task in tasks:
-        #     await task
+class CUDAData:
+    def __init__(self, model_path:str, output_dir:str, token: str, initializer_token: str, tokenizer: Optional[CLIPTokenizer] = None, tokenizer_2: Optional[CLIPTokenizer] = None, text_encoder: Optional[CLIPTextModel] = None, text_encoder_2: Optional[CLIPTextModelWithProjection] = None, vae: Optional[AutoencoderKL] = None, scheduler: Optional[DDPMScheduler] = None, batch_size:int = 1, target_size:int = 1024):
+        self.device = torch.device('cuda') if torch.cuda.is_available() else torch.device('mps') if torch.backends.mps.is_available() else torch.device('cpu')
 
-        return {"status":"OK"}
+        self.dtype = torch.float16 if torch.cuda.is_available() else torch.float32
+
+        if tokenizer is None:
+            self.tok = CLIPTokenizer.from_pretrained(model_path, subfolder='tokenizer')
+        else: self.tok = tokenizer
+
+        if tokenizer_2 is None:
+            self.tok2 = CLIPTokenizer.from_pretrained(model_path, subfolder='tokenizer_2')
+        else: self.tok2 = tokenizer_2
+
+        if text_encoder is None:
+            self.enc = CLIPTextModel.from_pretrained(model_path, subfolder='text_encoder', torch_dtype=self.dtype, use_safetensors=True)
+        else: self.enc = text_encoder
+
+        self.enc.to(self.device, dtype=self.dtype)
+
+        if text_encoder_2 is None:
+            self.enc2 = CLIPTextModelWithProjection.from_pretrained(model_path, subfolder='text_encoder_2', torch_dtype=self.dtype, use_safetensors=True)
+        else: self.enc2 = text_encoder_2
+
+        self.enc2.to(self.device, dtype=self.dtype)
+
+        self.enc.text_model.encoder.requires_grad_(False)
+        self.enc.text_model.final_layer_norm.requires_grad_(False)
+        self.enc.text_model.embeddings.position_embedding.requires_grad_(False)
+
+        self.enc2.text_model.encoder.requires_grad_(False)
+        self.enc2.text_model.final_layer_norm.requires_grad_(False)
+        self.enc2.text_model.embeddings.position_embedding.requires_grad_(False)
+
+        if vae is None:
+            self.vae = AutoencoderKL.from_pretrained(model_path, subfolder='vae')
+        else: self.vae = vae
+        self.vae.requires_grad_(False)
+        self.vae.to(self.device, dtype=self.dtype)
+
+        if scheduler is None:
+            self.scheduler = DDPMScheduler.from_pretrained(model_path, subfolder='scheduler')
+        else: self.scheduler = scheduler
+
+        self.output_dir = output_dir
+
+        self.token = token
+        self.init_token = initializer_token
+        self.batch_size = batch_size
+        self.size = target_size
+        self.flip = T.RandomHorizontalFlip(p=0.5)
+
+    def process(self):
+        tok, tok2, enc, enc2, token, output_dir, size, batch_size = self.tok, self.tok2, self.enc, self.enc2, self.token, self.output_dir, self.size, self.batch_size
+
+        # process initializer tokens
+
+        concept_tokens = tok.tokenize(self.init_tokens)
+        concept_ids= tok.encode(concept_tokens, add_special_tokens=False)
+
+        concept_tokens_2 = tok2.tokenize(self.init_tokens)
+        concept_ids_2 = tok2.encode(concept_tokens_2, add_special_tokens=False)
+
+        token_embedding = torch.zeros(shape=(1, enc.config.hidden_size), dtype=torch.float32, device=self.device).squeeze(0)
+
+        token_embedding_2 = torch.zeros(shape=(1, enc2.config.hidden_size), dtype=torch.float32, device=self.device).squeeze(0)
+
+        input_embeddings = enc.get_input_embeddings().weight.data
+        input_embeddings_2 = enc2.get_input_embeddings().weight.data
+
+        # initialize token embeddings
+        for tk, tk2 in zip(concept_ids, concept_ids_2):
+            token_embedding = token_embedding + 1 / len(concept_ids) * input_embeddings[tk]
+
+            token_embedding_2 = token_embedding_2 + 1 / len(concept_ids_2) * input_embeddings_2[tk2]
+
+        # process token
+        tok.add_tokens(token)
+        tok2.add_tokens(token)
+        enc.resize_token_embeddings(len(tok))
+        enc2.resize_token_embeddings(len(tok2))
+        token_id = tok.convert_tokens_to_ids(token)
+        token_id_2 = tok2.convert_tokens_to_ids(token)
+
+        with torch.no_grad():
+            input_embeddings[token_id] = token_embedding.clone()
+            input_embeddings_2[token_id_2] = token_embedding_2.clone()
+
+        # process prompts
+        captions_path = os.path.join(output_dir, 'captions.json')
+        with open(captions_path) as f:
+            captions = json.load(f)
+
+        data_dir = os.path.join(output_dir, f'datasets/{token}')
+
+        filenames = [f for f in filter(lambda n: n in captions, os.listdir(data_dir))]
+
+        prompt_embeddings_1 = torch.empty(size=(len(filenames), tok.model_max_length, enc.config.hidden_size), device=self.device, dtype=self.dtype)
+
+        prompt_embeddings_2 = torch.empty(size=(len(filenames), tok2.model_max_length, enc2.config.hidden_size), device=self.device, dtype=self.dtype)
+
+        prompts = [captions[f]['caption'] for f in filenames]
+        add_cond_kwargs = []
+
+        for prompt in prompts:
+            ids1 = tok(prompt, padding='max_length', truncation=True, max_length=tok.model_max_length, return_tensors='pt').input_ids
+            ids2 = tok2(prompt, padding='max_length', truncation=True, max_length=tok2.model_max_length, return_tensors='pt').input_ids
+
+            hidden_states_1 = enc(ids1, output_hidden_states=True).hidden_states[-2]
+
+            prompt_embeddings_1 = prompt_embeddings_1.add(hidden_states_1)
+
+            encoder_output_2 = enc2(ids2, output_hidden_states=True)
+            hidden_states_2 = encoder_output_2.hidden_states[-2]
+
+            prompt_embeddings_2 = prompt_embeddings_2.add(hidden_states_2)
+
+            add_cond_kwargs.append({'text_embeds': encoder_output_2['text_embeds']})
+
+        # process images
+        image_embeds = torch.empty(size=(len(filenames), 3, int(size * self.vae.config.scaling_factor), int(size * self.vae.config.scaling_factor)))
+
+        for filename in filenames:
+            file_path = os.path.join(data_dir, filename)
+            image = Image.open(file_path).convert('RGB')
+            scale_x = size / image.width
+            scale_y = size / image.height
+            scale = max(scale_x, scale_y)
+            image = image.resize((int(math.ceil(image.width * scale)), int(math.ceil(image.height * scale))))
+            x1, y1, x2, y2 = [int(math.ceil(n * scale)) for n in captions[filename]['bbox']]
+            w, h = x2 - x1, y2 - y1
+            x1 = min(x1 + w // 2 - size // 2, int(math.ceil(image.width - size)))
+            y1 = min(y1 + h // 2 - size // 2, int(math.ceil(image.height - size)))
+            x2 = x1 + size
+            y2 = y1 + size
+            image = image.crop((x1, y1, x2, y2))
+            image = self.flip(image)
+
+            # generate latent
+
+            image = np.array(image).astype(np.uint8)
+            image = (image / 127.5 - 1.0).astype(np.float32)
+            pixel_values = torch.from_numpy(image).permute(2, 0, 1)
+            latents = self.vae.encode(pixel_values).to(self.device, dtype=self.dtype)
+            latents = latents * self.vae.config.scaling_factor
+            noise = torch.randn_like(latents)
+            bsz = latents.shape[0]
+            timesteps = torch.randint(0, self.scheduler.config.num_train_timesteps, (bsz), device=latents.device)
+            timesteps = timesteps.long()
+            noisy_latents = self.scheduler.add_noise(latents, noise, timesteps)
+
+            original_size = [(size, size)] * batch_size
+            target_size = (size, size)
+
+            add_time_ids = torch.cat([torch.tensor(original_size[i] + target_size) for i in range(batch_size)])
+
+
+    def save(self):
+        pass

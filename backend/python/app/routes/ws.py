@@ -46,6 +46,25 @@ class CallBack:
 
 router = APIRouter()
 
+@router.websocket("/generate")
+async def generate_ws(ws: WebSocket):
+    global manager
+    await manager.connect(ws)
+
+    try:
+        async for message in ws.iter_json():
+            await ws.send_json({"status": "started"})
+            response = await generate(layer=message["layer"], bbox=message["bbox"])
+
+            await ws.send_json(response)
+
+    except WebSocketDisconnect:
+        manager.disconnect(ws)
+    except Exception as e:
+        await ws.send_json({"error": str(e)})
+        manager.disconnect(ws)
+        raise e
+
 # @router.websocket("/inpaint")
 # async def inpaint_websocket(ws: WebSocket):
 #     callback_on_step_end = CallBack(ws)

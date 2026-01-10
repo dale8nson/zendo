@@ -834,14 +834,15 @@ async def generate(prompt, iterations, guidance_scale, negative_prompt, prompt_2
             
             # use_ip_adapter_image = False
             if use_ip_adapter_image:
-                image = controlnet(prompt=prompt, negative_prompt=negative_prompt, prompt_2=prompt_2, negative_prompt_2=negative_prompt_2, image=ip_adapter_image,
-                latents=latent,
-                denoising_start=0.0,
-                guidance_scale=guidance_scale, num_inference_steps=iterations,
-                output_type='latent' if refiner_strength > 0 else 'pil',
-                denoising_end=1.0 - refiner_strength,
-                generator=torch.Generator(device=pipe.device).manual_seed(seed),
-                controlnet_conditioning_scale=0.65).images[0]
+                image = controlnet(
+                    prompt=prompt, negative_prompt=negative_prompt, prompt_2=prompt_2, negative_prompt_2=negative_prompt_2, image=ip_adapter_image,
+                    latents=latent,
+                    denoising_start=0.0,
+                    guidance_scale=guidance_scale, num_inference_steps=iterations,
+                    output_type='latent' if refiner_strength > 0 else 'pil',
+                    denoising_end=1.0 - refiner_strength,
+                    generator=torch.Generator(device=pipe.device).manual_seed(seed),
+                    controlnet_conditioning_scale=0.65).images[0]
 
                 # print(f'image.shape: {image.shape}')
 

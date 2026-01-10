@@ -7,7 +7,7 @@ class Blip2Model:
     def __init__(self):
 
         self.configuration = Blip2Config()
-        self.model = Blip2ForConditionalGeneration(configuration)
+        self.model = Blip2ForConditionalGeneration(self.configuration)
         self.configuration = self.model.config
         self.vision_config = Blip2VisionConfig()
         self.qformer_config = Blip2QFormerConfig()

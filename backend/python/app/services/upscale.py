@@ -8,7 +8,7 @@ from PIL import Image, ImageOps
 from PIL.Image import Resampling
 import cv2
 import numpy as np
-from typing import List, Any, cast
+from typing import List, Any, cast, Optional
 from pydantic import BaseModel
 
 def extract_base64_data(data_url: str) -> str:
@@ -38,6 +38,7 @@ def upscale(image_data: str):
     b64 = extract_base64_data(image_data)
     bytes = base64.b64decode(b64)
     image = Image.open(BytesIO(bytes)).convert("RGB")
+    image = image.reduce(4)
     print(f"image: {image}")
     image.save(os.path.join(os.getcwd(), "app/test_images/upscaler_input.png"))
     # image = image.resize((int(image.width * 0.25), int(image.height * 0.25)), resample=Resampling.BOX)
@@ -73,7 +74,7 @@ def upscale(image_data: str):
     # output = arr
 
     image = Image.fromarray(output).convert("RGBA")
-    image = image.reduce(4)
+    
 
     image.save(os.path.join(os.getcwd(), "app/test_images/upscaler_output.png"))
 
@@ -94,7 +95,9 @@ class Layer(BaseModel):
     history: List[Any]
 
 class UpscaleRequest(BaseModel):
-    layers: List[Layer]
+    layers: List[Layer] | None
+    image_data: str | None
+    bbox: List[int] | None
 
 def composite_layers(layers: List[Layer]):
 
@@ -102,7 +105,7 @@ def composite_layers(layers: List[Layer]):
     root_history_index = root_layer.currentLayerHistoryIndex
     x1, y1, x2, y2 = root_layer.history[root_history_index]["bbox"]
 
-    width, height = x2 - x1, y2 - y1
+    width, height = int(x2 - x1), int(y2 - y1)
     size = max(width, height)
     mx, my = (size - width) // 2, (size - height) // 2
 

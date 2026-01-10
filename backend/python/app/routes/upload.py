@@ -2,11 +2,11 @@ from fastapi import APIRouter, File, UploadFile, HTTPException, Form
 from typing import Annotated
 from fastapi.responses import JSONResponse
 import shutil
-from app.services.metadata_handler import save_metadata_entry
+from ..services.metadata_handler import save_metadata_entry
 import os
 from datetime import datetime
 import uuid
-from app.services.db import UPLOADS_DIR
+from ..services.db import UPLOADS_DIR
 from PIL import Image
 
 
@@ -49,8 +49,14 @@ async def upload_image(file: Annotated[UploadFile, Form()], collection: Annotate
         }
 
         print(metadata)
-        await save_metadata_entry(metadata)
+        
+        try:
+            await save_metadata_entry(metadata)
+            
+        except Exception as e:
+            print(f"Error saving metadata: {e}")
+            raise HTTPException(status_code=500, detail='Error saving metadata') from e
 
         return JSONResponse(content={"status": "success", "filename": file.filename})
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e

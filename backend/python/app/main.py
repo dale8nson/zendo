@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routes import upload, metadata, images, image, caption, score, cropped_image_caption, tokenize, upscale, ws, tokens
+from .routes import upload, metadata, images, image, caption, score, cropped_image_caption, tokenize, upscale, ws, tokens, encode_decode
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import os
@@ -32,6 +32,7 @@ else:
     print(f"[Warning] Uploads directory '{UPLOADS_DIR}' does not exist. Skipping upload mount.")
 
 app.include_router(upload.router, prefix="/api")
+app.include_router(encode_decode.router, prefix="/api")
 app.include_router(metadata.router, prefix="/api")
 app.include_router(images.router, prefix="/api")
 app.include_router(image.router, prefix="/api")
