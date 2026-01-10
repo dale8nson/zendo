@@ -46,6 +46,8 @@ import {
 
 import { MaskTable } from '@/components/MaskTable'
 
+import { rustUpscale, sdxlGenerateViaWs, backendUrl } from '@/lib/backend'
+
 const generate = async (
   prompt: string,
   iterations: number,
@@ -59,38 +61,28 @@ const generate = async (
   remove_background: boolean,
   use_ip_adapter_image: boolean,
   refiner_strength: number,
-  seed: number | null
+  seed: number | null,
+  threshold1: number,
+  threshold2: number,
+  aperture_size: number,
+  l2_gradient: number,
+  onProgress?: (step: number, total: number) => void
 ): Promise<string> => {
-  console.log('getPreview called with prompt:', prompt)
-  const body = JSON.stringify({
+  // Map UI sliders to SDXL params
+  const steps = Math.max(1, Math.min(50, iterations || 25))
+  const gs = Number.isFinite(guidance_scale) ? guidance_scale : 7.5
+  const width = 1024
+  const height = 1024
+  const params = {
     prompt,
-    iterations,
-    guidance_scale,
     negative_prompt,
-    prompt_2,
-    negative_prompt_2,
-    ip_adapter_image,
-    use_face_id,
-    bbox,
-    remove_background,
-    use_ip_adapter_image,
-    refiner_strength,
-    seed
-  })
-
-  console.log(`body: ${body}`)
-
-  // const response = await fetch('http://10.0.0.22:8002/api/generate', {
-  const response = await fetch('http://127.0.0.1:8001/api/generate', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body,
-    cache: 'no-cache',
-  })
-  const data = await response.json()
-  return data.image
+    width,
+    height,
+    steps,
+    guidance_scale: gs,
+    seed: seed ?? undefined,
+  }
+  return await sdxlGenerateViaWs(params, onProgress)
 }
 
 const get_masks = async (request: MasksRequest) => {
@@ -212,6 +204,7 @@ export function RightSideBar() {
     ;(() => console.log(`adapterImage`, adapterImage))()
 
     dispatch(toggleDisabled(true))
+    dispatch(setProgress(0))
     const b64 = await generate(
       generatePrompt,
       generationIterations,
@@ -225,7 +218,15 @@ export function RightSideBar() {
       generateRemoveBG,
       useIPAdapterImage,
       generateRefinerStrength,
-      generateUseSeed? generateSeed : null
+      generateUseSeed? generateSeed : null,
+      generateThreshold1,
+      generateThreshold2,
+      generateApertureSize,
+      generateL2Gradient,
+      (step, total) => {
+        const pct = Math.round((step / total) * 100)
+        dispatch(setProgress(pct))
+      }
     )
     ;(() => console.log('Received image data'))()
     dispatch(toggleDisabled(false))
@@ -237,22 +238,14 @@ export function RightSideBar() {
     const layers = layerHistory[currentHistoryIndex]
     const root = layers.find((layer) => layer.label === 'root') as Layer
     const index = root?.currentLayerHistoryIndex as number
-    // let bbox = root.history[index].bbox
-
-    const body = JSON.stringify({
-      layers: layerHistory[currentHistoryIndex],
-    })
-
-    const response = await fetch('http://localhost:8000/api/upscale', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body,
-      cache: 'no-cache',
-    })
-    const { bbox, image_data: imageData } = await response.json()
-    dispatch(newImage({ bbox, imageData }))
+    const img = root?.history?.[index]?.imageData as string | undefined
+    if (!img) return
+    try {
+      const out = await rustUpscale(img)
+      dispatch(newImage({ bbox: [0,0,1024,1024], imageData: out }))
+    } catch (e) {
+      console.error('Upscale error', e)
+    }
   }
 
   const img2imgButtonHandler = async () => {

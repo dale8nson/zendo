@@ -110,7 +110,7 @@ const previewSlice = createSlice({
       maskData[index].active = false
       maskData[(index + 1) % maskData.length].active = true
       state.maskIndex = (index + 1) % maskData.length
-      state.maskData = maskData
+      state.maskData = [...maskData]
     },
     previousMask(state) {
       let maskData = [...state.maskData]
@@ -118,7 +118,7 @@ const previewSlice = createSlice({
       maskData[index].active = false
       maskData[(index > 0 ? index : maskData.length) - 1].active = true
       state.maskIndex = (index > 0 ? index : maskData.length) - 1
-      state.maskData = maskData
+      state.maskData = [...maskData]
     },
     includeMask(state, action) {
       const index = action.payload

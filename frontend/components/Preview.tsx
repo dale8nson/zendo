@@ -99,15 +99,20 @@ export function Preview() {
   const debounce = useRef(false)
 
   const drawLayers = async () => {
-    if (!canvasRef.current || !layerHistory.length) return
+    if (!canvasRef.current || layerHistory.length === 0) return
     const canv = canvasRef.current as HTMLCanvasElement
     const ctx = canv.getContext('2d')
     if (!ctx) return
     ctx.clearRect(0, 0, canv.width, canv.height)
 
-    for (const index in layerImages[currentHistoryIndex]) {
-      const image = layerImages[currentHistoryIndex][index]
-      const layer = layerHistory[currentHistoryIndex][index]
+    const images = layerImages[currentHistoryIndex] || []
+    for (let i = 0; i < images.length; i++) {
+      const image = images[i]
+      if (!image || !image.complete || image.naturalWidth === 0 || image.naturalHeight === 0) {
+        // Skip images that haven't finished loading or failed to load
+        continue
+      }
+      const layer = layerHistory[currentHistoryIndex][i]
 
       const [x1, y1, x2, y2] = layer.history[layer.currentLayerHistoryIndex].bbox as Array<number>
 
@@ -122,7 +127,12 @@ export function Preview() {
       ctx.globalAlpha = layer.opacity
       ;[x, y, w, h] = [x, y, w, h].map((n) => n * scale)
 
-      ctx.drawImage(image, 0, 0, image.width, image.height, x, y, w, h)
+      try {
+        ctx.drawImage(image, 0, 0, image.width, image.height, x, y, w, h)
+      } catch (e) {
+        // Guard against rare race conditions where the image becomes broken
+        console.warn('drawImage skipped due to image state', e)
+      }
     }
   }
 
@@ -133,7 +143,7 @@ export function Preview() {
     if (!ctx) return
     console.log(`masks: `, masks)
     if (masks.length && maskVisible) {
-      masks.forEach((mask, index) => {
+      masks.forEach(async (mask, index) => {
         console.log(`maskData[${index}]: `, maskData[index])
         const [x, y, w, h] = maskData[index].canvas_box
         console.log(`maskData[${index}]: `, maskData[index])
@@ -149,9 +159,16 @@ export function Preview() {
           image = mask.segmentation
         }
 
-        console.log(`image ${image}`)
-
-        ctx.drawImage(image, 0, 0, image.width, image.height, x, y, w, h)
+        try {
+          if (!image.complete || image.naturalWidth === 0) {
+            await image.decode().catch(() => {})
+          }
+          if (image.naturalWidth && image.naturalHeight) {
+            ctx.drawImage(image, 0, 0, image.width, image.height, x, y, w, h)
+          }
+        } catch (e) {
+          console.warn('drawMasks skipped image due to load state', e)
+        }
       })
     }
   }
@@ -354,7 +371,7 @@ export function Preview() {
     const size = Math.max(w, h)
     const [mx, my] = [Math.floor((size - w) / 2), Math.floor((size - h) / 2)]
     ;[x, y, w, h] = scaledSelectionBox
-    bbox = [x - mx, y - my, x - mx + w, y - my + h]
+    bbox = [x, y, x + w, y + h]
     const message = {
       layer,
       bbox,
@@ -384,12 +401,25 @@ export function Preview() {
           console.log(`data: `, data)
 
           let new_data = [...data]
-          new_data = new_data.map((d) => ({ ...d, canvas_box: maskBox, bbox: bbox, active: false }))
           let oldData = [...maskData]
-          oldData = oldData.map((d) => ({ ...d, active: false }))
           let newMaskData = [...oldData, ...new_data].toSorted((d1, d2) => d2.area - d1.area)
+          let [x1, y1, x2, y2] = rootBbox
+          let [x, y, w, h] = [x1, y1, x2 - x1, y2 - y1]
+          const scaleX = canv.width / w
+          const scaleY = canv.height / h
+          const scale = Math.min(scaleX, scaleY)
+          newMaskData = newMaskData.map((d) => {
+            const bbox = d.bbox
+            const canvas_bbox = bbox.map((n) => n * scale)
+            ;[x1, y1, x2, y2] = canvas_bbox
+            // const canvas_box = [x1, y1, x2 - x1, y2 - y1]
+            // const [x1, y1, x2, y2] = scaledBbox
+            const canvas_box = selectionBox.current
+            return { ...d, active: false, canvas_box }
+          })
           newMaskData[0].active = true
           dispatch(setMaskData([...newMaskData]))
+          dispatch(setMaskIndex(0))
 
           // if (canvasRef.current) {
           //   drawLayers()
@@ -489,25 +519,35 @@ export function Preview() {
   useEffect(() => {
     if (!layerHistory.length) return
     console.log('layerHistory: ', layerHistory)
-    const images: HTMLImageElement[] = []
-    const layers = layerHistory[currentHistoryIndex]
-    for (const layer of layers) {
-      console.log('layer: ', layer)
-      const image = new Image()
-      image.src = `data:image/png;base64,${layer.history[layer.currentLayerHistoryIndex].imageData}`
-      images.push(image)
+
+    const loadImage = (src: string) => new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image()
+      img.onload = () => resolve(img)
+      img.onerror = (e) => reject(e)
+      img.src = src
+    })
+
+    const run = async () => {
+      const layers = layerHistory[currentHistoryIndex]
+      const promises = layers.map((layer) =>
+        loadImage(`data:image/png;base64,${layer.history[layer.currentLayerHistoryIndex].imageData}`)
+          .catch((e) => {
+            console.error('Image load failed', e)
+            // Return a dummy 1x1 transparent image to keep indexes aligned
+            const dummy = new Image()
+            dummy.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAlEB9lCk6CwAAAAASUVORK5CYII='
+            return dummy
+          })
+      )
+      const images = await Promise.all(promises)
+
+      const layerImgs = [...layerImages]
+      layerImgs[currentHistoryIndex] = images
+      setLayerImages(layerImgs)
     }
 
-    console.log('images: ', images)
-
-    let layerImgs: HTMLImageElement[][] = []
-    layerImgs = [...layerImages]
-    console.log(`currentHistoryIndex: ${currentHistoryIndex})`)
-    layerImgs[currentHistoryIndex] = images
-
-    console.log('layerImgs: ', layerImgs)
-
-    setLayerImages(layerImgs)
+    // Kick off async image loading
+    run()
   }, [layerHistory])
 
   useEffect(() => {
@@ -545,7 +585,7 @@ export function Preview() {
     drawLayers()
     drawMasks()
     drawSelectionBox()
-
+    
     const observer = new ResizeObserver((entries, target) => {
       if (maskData.length) {
         const width = entries[0].borderBoxSize[0].inlineSize
@@ -666,9 +706,12 @@ export function Preview() {
             <button
               onClick={() => {
                 console.log('Back button clicked')
-                dispatch(setCurrentHistoryIndex(currentHistoryIndex - 1))
+                dispatch(
+                  setCurrentHistoryIndex(
+                    currentHistoryIndex > 0 ? currentHistoryIndex - 1 : layerHistory.length - 1
+                  )
+                )
               }}
-              disabled={currentHistoryIndex === 0}
               className="cursor-pointer"
             >
               <svg
@@ -684,9 +727,8 @@ export function Preview() {
             <button
               onClick={() => {
                 console.log('Forward button clicked')
-                dispatch(setCurrentHistoryIndex(currentHistoryIndex + 1))
+                dispatch(setCurrentHistoryIndex((currentHistoryIndex + 1) % layerHistory.length))
               }}
-              disabled={currentHistoryIndex === layerHistory.length - 1}
               className="cursor-pointer"
             >
               <svg
@@ -740,7 +782,7 @@ export function Preview() {
             <ContextMenuTrigger>
               <canvas
                 ref={canvasRef}
-                className="relative w-full h-full cursor-crosshair object-contain border-red-500 border-2"
+                className="relative w-full h-full cursor-crosshair object-contain"
                 width={1024}
                 height={1024}
                 onPointerDown={pointerDown}

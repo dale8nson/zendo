@@ -152,15 +152,22 @@ export const ImageEditor = () => {
   const collection = useAppSelector((state) => state.imageEditor.collection)
 
   const tokenize = async (text: string) => {
-    const response = await fetch('http://127.0.0.1:8000/api/tokenize', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ text }),
-    })
-    const { tokens } = await response.json()
-    return tokens
+    const api = process.env.NEXT_PUBLIC_API_URL
+    if (!api) return [] as string[]
+    try {
+      const response = await fetch(`${api.replace(/\/$/, '')}/tokenize`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ text }),
+      })
+      if (!response.ok) return []
+      const { tokens } = await response.json()
+      return tokens
+    } catch {
+      return [] as string[]
+    }
   }
 
   const { data: caption_score } = useQuery(

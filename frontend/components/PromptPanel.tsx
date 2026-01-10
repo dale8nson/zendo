@@ -21,6 +21,7 @@ import {
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { queryOptions, useQuery } from '@tanstack/react-query'
+import { backendUrl } from '@/lib/backend'
 
 export function PromptPanel() {
   const generatePrompt = useAppSelector((state) => state.promptPanel.generate_prompt)
@@ -57,12 +58,23 @@ export function PromptPanel() {
     queryOptions({
       queryKey: ['tokens'],
       queryFn: async () => {
-        const res = await fetch(`http://127.0.0.1:8000/api/tokens`)
-        if (!res.ok) {
-          throw new Error(`Failed to fetch tokens: ${res.status} ${res.statusText}`)
+        // Prefer external Python API if provided, otherwise return empty tokens.
+        const api = process.env.NEXT_PUBLIC_API_URL
+        if (!api) return { tokens: [] as string[] }
+        try {
+          const url = `${api.replace(/\/$/, '')}/tokens`
+          const res = await fetch(url)
+          if (!res.ok) {
+            console.warn(`Tokens fetch failed: ${res.status} ${res.statusText}`)
+            return { tokens: [] as string[] }
+          }
+          return await res.json()
+        } catch (e) {
+          console.warn('Tokens fetch error', e)
+          return { tokens: [] as string[] }
         }
-        return await res.json()
       },
+      retry: false,
       refetchOnWindowFocus: false,
       staleTime: Infinity,
     })

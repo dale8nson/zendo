@@ -278,18 +278,20 @@ export const LeftSideBar = () => {
 
   const upscale = async () => {
     if (!selectedImage?.image_data) return
-    
-    const response = await fetch('http://localhost:8000/api/image/upscale', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ image_data: selectedImage.image_data }),
-      cache: 'no-cache',
-    })
-    
-    const { bbox, image_data: imageData } = await response.json()
-    dispatch(newImage({ bbox, imageData }))
+    try {
+      const { rustUpscale } = await import('@/lib/backend')
+      const out = await rustUpscale(selectedImage.image_data)
+      const meta: MetadataEntry = {
+        ...selectedImage,
+        id: Number(`0x${crypto.randomUUID().replace(/-/g, '')}`),
+        image_data: out,
+        filename: selectedImage?.filename ?? '',
+        original_filename: selectedImage?.original_filename ?? '',
+      }
+      dispatch(setSelectedImage({ ...meta }))
+    } catch (e) {
+      console.error('Upscale error', e)
+    }
   }
 
   useEffect(() => {

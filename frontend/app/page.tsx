@@ -39,5 +39,3 @@ export default function HomePage() {
     </main>
   )
 }
-
-// w-1/5 min-w-[200px] bg-neutral-900 border-r border-neutral-800 p-2 overflow-y-auto
