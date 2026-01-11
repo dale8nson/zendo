@@ -49,3 +49,4 @@ tools/onnx_export/.venv-sdxl/**/*
 tools/onnx_export/.venv-sdxl/bin/**/*
 *.safetensors
 validation/
+user/
